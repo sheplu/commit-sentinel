@@ -1,30 +1,13 @@
 # commit-sentinel
 
-A CLI tool to enforce commit message conventions and PR hygiene across your projects.
+A CLI tool to validate git commit message formats.
 
 ## Features
 
-### Commit Message Validation
-
-- **Conventional Commits** - Enforce the `type(scope): description` format
-- **Type Whitelist** - Restrict commits to allowed types (feat, fix, docs, chore, refactor, test, ci, etc.)
-- **Scope Validation** - Optional or required scopes with regex pattern matching
-- **Subject Line Rules** - Max length, case enforcement, no trailing period, imperative mood
-- **Body Rules** - Require blank line after subject, enforce line wrap limits
-- **Footer Validation** - Issue references, breaking change markers, sign-off requirements
-
-### PR and Branch Rules
-
-- **Max Commits per PR** - Enforce squashing or limit commit count
-- **Branch Naming** - Regex patterns for branch names (e.g., `feature/JIRA-123-description`)
-- **Linear History** - Detect merge commits, enforce rebased history
-
-### Developer Experience
-
-- Clear error messages with fix suggestions
-- Interactive commit message builder
-- Dry-run mode for validation without blocking
-- Configurable severity levels (error, warning, ignore)
+- Validates Conventional Commit-style subjects: `type: subject` or `type(scope): subject`
+- Starts with a strict type allowlist: `feat`, `fix`, and `chore`
+- Reads commit messages from a string, file, stdin, or a git commit ref
+- Returns CI-friendly exit codes and actionable error messages
 
 ## Installation
 
@@ -36,134 +19,42 @@ npm install -g @sheplu/commit-sentinel
 
 ```bash
 # Validate the last commit
-@sheplu/commit-sentinel
+commit-sentinel
+
+# Validate a commit message string
+commit-sentinel --message "feat: add login"
+
+# Validate a commit message file, e.g. from a commit-msg hook
+commit-sentinel --file .git/COMMIT_EDITMSG
 
 # Validate a specific commit
-@sheplu/commit-sentinel --commit <sha>
+commit-sentinel --commit HEAD~1
 
-# Validate all commits in a PR/branch
-@sheplu/commit-sentinel --range main..HEAD
-
-# Validate branch name
-@sheplu/commit-sentinel --branch
-
-# Interactive commit message builder
-@sheplu/commit-sentinel --interactive
-
-# Dry-run mode
-@sheplu/commit-sentinel --dry-run
+# Read a commit message from stdin
+echo "fix(api): handle timeout" | commit-sentinel --stdin
 ```
 
-## Configuration
+Valid messages:
 
-Create a `commit-sentinel.config.json` file in your project root:
-
-```json
-{
-  "extends": "default",
-  "rules": {
-    "type": {
-      "level": "error",
-      "allowed": ["feat", "fix", "docs", "chore", "refactor", "test", "ci", "perf", "style"]
-    },
-    "scope": {
-      "level": "error",
-      "required": false,
-      "pattern": "^[a-z][a-z0-9-]*$"
-    },
-    "subject": {
-      "level": "error",
-      "maxLength": 72,
-      "minLength": 10,
-      "case": "lower",
-      "noPeriod": true
-    },
-    "body": {
-      "level": "warning",
-      "required": false,
-      "maxLineLength": 100
-    },
-    "footer": {
-      "level": "warning",
-      "requireIssueRef": false,
-      "issuePattern": "^(closes|fixes|resolves) #[0-9]+$"
-    },
-    "pr": {
-      "level": "error",
-      "maxCommits": 10
-    },
-    "branch": {
-      "level": "error",
-      "pattern": "^(main|develop|(feature|fix|hotfix|release)/[A-Z]+-[0-9]+-[a-z0-9-]+)$"
-    }
-  }
-}
+```text
+feat: add user login
+fix(api): handle request timeout
+chore: update tooling
 ```
 
-### Config File Formats
+Invalid messages:
 
-Configuration is resolved in the following order (first match wins):
-
-1. `"commit-sentinel"` field in `package.json` (recommended)
-2. `commit-sentinel.config.ts`
-3. `commit-sentinel.config.js`
-4. `commit-sentinel.config.json`
-
-#### Using package.json (recommended)
-
-Add a `"commit-sentinel"` field to your `package.json` to avoid config file sprawl:
-
-```json
-{
-  "name": "my-project",
-  "version": "1.0.0",
-  "commit-sentinel": {
-    "extends": "default",
-    "rules": {
-      "type": {
-        "allowed": ["feat", "fix", "docs", "chore"]
-      },
-      "subject": {
-        "maxLength": 72
-      }
-    }
-  }
-}
+```text
+docs: update readme
+fix missing colon
+feat:
 ```
 
-#### Using TypeScript config
+## Exit Codes
 
-For dynamic configurations, use `commit-sentinel.config.ts`:
-
-```typescript
-import type { Config } from '@sheplu/commit-sentinel';
-
-export default {
-  extends: 'default',
-  rules: {
-    type: {
-      allowed: ['feat', 'fix', 'docs', 'chore'],
-    },
-    scope: {
-      pattern: `^(${['api', 'web', 'cli', 'core'].join('|')})$`,
-    },
-  },
-} satisfies Config;
-```
-
-### Rule Levels
-
-- `error` - Validation fails, non-zero exit code
-- `warning` - Prints warning but passes validation
-- `ignore` - Rule is disabled
-
-### Extending Configurations
-
-```json
-{
-  "extends": ["default", "./custom-rules.json", "@company/commit-rules"]
-}
-```
+- `0` - Commit message is valid
+- `1` - CLI usage or runtime error
+- `2` - Commit message validation failed
 
 ## Git Hooks Integration
 
@@ -172,7 +63,7 @@ export default {
 ```bash
 npm install --save-dev husky
 npx husky init
-echo "commit-sentinel --commit \$1" > .husky/commit-msg
+echo "commit-sentinel --file \$1" > .husky/commit-msg
 ```
 
 ### Using with lefthook
@@ -182,15 +73,13 @@ echo "commit-sentinel --commit \$1" > .husky/commit-msg
 commit-msg:
   commands:
     validate:
-      run: commit-sentinel --commit {1}
+      run: commit-sentinel --file {1}
 ```
 
 ## CI/CD Integration
 
-### GitHub Actions
-
 ```yaml
-name: Validate Commits
+name: Validate Commit
 on: [pull_request]
 
 jobs:
@@ -204,40 +93,17 @@ jobs:
         with:
           node-version: '24'
       - run: npm install -g @sheplu/commit-sentinel
-      - run: commit-sentinel --range origin/main..HEAD
-```
-
-### GitLab CI
-
-```yaml
-validate-commits:
-  image: node:24
-  script:
-    - npm install -g @sheplu/commit-sentinel
-    - @sheplu/commit-sentinel --range origin/main..HEAD
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      - run: commit-sentinel --commit HEAD
 ```
 
 ## API
 
 ```typescript
-import { validate, validateCommit, validateBranch } from 'commit-sentinel';
+import { validateCommit } from '@sheplu/commit-sentinel';
 
-// Validate a commit message
 const result = validateCommit('feat(api): add user endpoint');
 
 if (!result.valid) {
   console.error(result.errors);
 }
-
-// Validate with custom config
-const result = validate({
-  message: 'feat: add feature',
-  config: {
-    rules: {
-      scope: { required: true }
-    }
-  }
-});
 ```

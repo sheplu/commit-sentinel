@@ -1,0 +1,44 @@
+{
+  "name": "@sheplu/commit-sentinel",
+  "version": "0.1.0",
+  "description": "Validate git commit message formats",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sheplu/commit-sentinel.git"
+  },
+  "homepage": "https://github.com/sheplu/commit-sentinel#readme",
+  "bugs": {
+    "url": "https://github.com/sheplu/commit-sentinel/issues"
+  },
+  "type": "module",
+  "bin": {
+    "commit-sentinel": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node index.ts",
+    "test": "node --test --test-reporter=spec 'test/**/*.test.ts'",
+    "test:unit": "node --test 'test/unit/**/*.test.ts'",
+    "test:integration": "node --test 'test/integration/**/*.test.ts'",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'test/**/*.test.ts'",
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --project tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "oxlint": "^1.66.0",
+    "typescript": "^6.0.3"
+  }
+}
