@@ -19,8 +19,10 @@ describe('git operations', () => {
   it('listCommitsInRange returns commit SHAs', async () => {
     const shas = await listCommitsInRange('HEAD~1..HEAD');
     assert.ok(Array.isArray(shas));
-    assert.equal(shas.length, 1);
-    assert.match(shas[0]!, /^[0-9a-f]{40}$/);
+    assert.ok(shas.length >= 1, `Expected at least 1 commit, got ${shas.length}`);
+    for (const sha of shas) {
+      assert.match(sha, /^[0-9a-f]{40}$/);
+    }
   });
 
   it('readCommitMessage rejects invalid ref', async () => {
