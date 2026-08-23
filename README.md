@@ -1,13 +1,8 @@
 # commit-sentinel
 
-A CLI tool to validate git commit message formats.
+A CLI tool and library to validate and enforce git commit message standards. Supports [Conventional Commits](https://www.conventionalcommits.org), configurable rules, presets, and multiple output formats.
 
-## Features
-
-- Validates Conventional Commit-style subjects: `type: subject` or `type(scope): subject`
-- Starts with a strict type allowlist: `feat`, `fix`, and `chore`
-- Reads commit messages from a string, file, stdin, or a git commit ref
-- Returns CI-friendly exit codes and actionable error messages
+Zero runtime dependencies — runs on Node.js ≥ 24 built-ins only.
 
 ## Installation
 
@@ -15,48 +10,176 @@ A CLI tool to validate git commit message formats.
 npm install -g @sheplu/commit-sentinel
 ```
 
-## Usage
+Or as a dev dependency:
 
 ```bash
-# Validate the last commit
+npm install --save-dev @sheplu/commit-sentinel
+```
+
+## Quick Start
+
+```bash
+# Validate the last commit (uses strict preset by default)
 commit-sentinel
 
 # Validate a commit message string
 commit-sentinel --message "feat: add login"
 
-# Validate a commit message file, e.g. from a commit-msg hook
+# Validate a file (e.g., from a git hook)
 commit-sentinel --file .git/COMMIT_EDITMSG
 
+# Validate all commits in a PR
+commit-sentinel --base main
+```
+
+## Configuration
+
+Create a `commit-sentinel.config.ts` file in your project root:
+
+```typescript
+import { defineConfig } from '@sheplu/commit-sentinel';
+
+export default defineConfig({
+  extends: 'conventional',
+  rules: {
+    'subject-max-length': ['warn', { max: 72 }],
+    'author-email': ['error', { pattern: '^.+@company\\.com$' }],
+    'signed': 'off',
+  },
+});
+```
+
+### How config resolution works
+
+1. Looks for `commit-sentinel.config.ts` in the current working directory
+2. If found, loads it via native `import()` and reads the default export
+3. Resolves the `extends` preset, then applies user `rules` on top
+4. If no config file is found, falls back to the `strict` preset
+
+> **Note:** The config file is looked up in the current working directory only. Monorepo directory-tree walking is planned for a future release.
+
+> **Note:** Node.js caches ESM `import()` by URL. If you change the config file, restart the process to pick up the new values.
+
+### Severity levels
+
+Each rule can be set to one of three levels:
+
+| Level | Effect |
+|-------|--------|
+| `'error'` | Fails validation (exit code 2) |
+| `'warn'` | Prints a warning but passes (exit code 0) |
+| `'off'` | Rule is disabled entirely |
+
+Rules can be configured as a bare severity (`'error'`) or as a tuple with options (`['warn', { max: 72 }]`).
+
+## Presets
+
+| Preset | Types | Notable defaults |
+|--------|-------|-----------------|
+| **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100 |
+| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore` | subject-case: warn@lower, header-max-length: warn@100 |
+| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `test` | subject-case: error@lower, header-max-length: error@100 |
+
+## Rules
+
+| Rule | Category | Options | Default |
+|------|----------|---------|---------|
+| `format` | format | — | Commit must match `type: subject` or `type(scope): subject` |
+| `type-enum` | format | `{ allowed?: string[] }` | Types from the active preset |
+| `scope-enum` | format | `{ allowed?: string[] }` | No restriction (empty list) |
+| `scope-required` | format | — | Scope is optional |
+| `subject-max-length` | content | `{ max?: number }` | 72 characters |
+| `subject-min-length` | content | `{ min?: number }` | 1 character |
+| `subject-case` | content | `{ case?: 'lower' \| 'sentence' \| 'upper' }` | `'lower'` |
+| `header-max-length` | content | `{ max?: number }` | 100 characters |
+| `body-required` | content | — | Body is optional |
+| `body-max-line-length` | content | `{ max?: number }` | 100 characters |
+| `breaking-change` | content | `{ requireFooter?: boolean }` | Footer not required |
+| `author-email` | git | `{ pattern?: string }` | Match any (`.+`) |
+| `signed` | git | — | Signing not required |
+
+**Git-metadata rules** (`author-email`, `signed`) require an actual git commit ref. They are automatically skipped (with a notice) when validating message text directly (`--message`, `--stdin`, `--file`).
+
+> **Note:** Rules execute in the order they appear in the resolved config (preset order, then user overrides). This order is deterministic but implicit — if rule ordering matters for your use case, define them explicitly in your config.
+
+## CLI
+
+```
+Usage: commit-sentinel [options]
+
+Options:
+  -m, --message <message>    Validate a commit message string
+  -F, --file <path>          Validate the first line from a commit message file
+  -c, --commit <ref>         Validate a git commit message (default: HEAD)
+      --stdin                Read the commit message from stdin
+      --range <range>        Validate all commits in a git range (e.g., main..HEAD)
+      --base <ref>           Validate all commits from <ref>..HEAD (PR shorthand)
+      --config <path>        Path to config file (default: commit-sentinel.config.ts)
+      --json                 Output results as JSON
+      --sarif                Output results as SARIF 2.1.0
+  -h, --help                 Show help
+  -v, --version              Show version number
+```
+
+### Examples
+
+```bash
 # Validate a specific commit
 commit-sentinel --commit HEAD~1
 
-# Read a commit message from stdin
+# Validate all commits in a range
+commit-sentinel --range main..HEAD
+
+# Validate a PR (shorthand for --range <ref>..HEAD)
+commit-sentinel --base main
+
+# JSON output for scripting
+commit-sentinel --message "feat: add login" --json
+
+# SARIF output for GitHub Code Scanning
+commit-sentinel --range main..HEAD --sarif > results.sarif
+
+# Read from stdin (e.g., piped from git)
 echo "fix(api): handle timeout" | commit-sentinel --stdin
+
+# Use a custom config file
+commit-sentinel --message "feat: add login" --config path/to/config.ts
 ```
 
-Valid messages:
+### Exit codes
 
-```text
-feat: add user login
-fix(api): handle request timeout
-chore: update tooling
+| Code | Meaning |
+|------|---------|
+| `0` | Commit message is valid (warnings may be present) |
+| `1` | CLI usage error or runtime error |
+| `2` | Commit message validation failed |
+
+## Output formats
+
+### Human (default)
+
+```
+✔ Valid commit message: feat: add login
 ```
 
-Invalid messages:
+```
+✖ Invalid commit message: bad message
 
-```text
-docs: update readme
-fix missing colon
-feat:
+  ✖ Commit message must match "type: subject" or "type(scope): subject". [format]
+    Suggestion: Example: feat: add login, fix(api): handle timeout.
+
+1 error(s)
 ```
 
-## Exit Codes
+### JSON (`--json`)
 
-- `0` - Commit message is valid
-- `1` - CLI usage or runtime error
-- `2` - Commit message validation failed
+Full `ValidationReport` object with `valid`, `commit`, `results`, `errorCount`, `warningCount`.
 
-## Git Hooks Integration
+### SARIF (`--sarif`)
+
+[SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for integration with GitHub Code Scanning and other static analysis tools.
+
+## Git hooks integration
 
 ### Using with Husky
 
@@ -76,34 +199,74 @@ commit-msg:
       run: commit-sentinel --file {1}
 ```
 
-## CI/CD Integration
+## CI/CD integration
 
 ```yaml
-name: Validate Commit
+name: Validate Commits
 on: [pull_request]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install -g @sheplu/commit-sentinel
-      - run: commit-sentinel --commit HEAD
+      - run: commit-sentinel --base origin/main
 ```
 
-## API
+## Programmatic API
 
 ```typescript
-import { validateCommit } from '@sheplu/commit-sentinel';
+import {
+  parseCommit,
+  validate,
+  loadConfig,
+  defineConfig,
+  defineRule,
+} from '@sheplu/commit-sentinel';
 
-const result = validateCommit('feat(api): add user endpoint');
+// Parse a commit message
+const commit = parseCommit('feat(api)!: drop v1\n\nBREAKING CHANGE: removed /v1');
+console.log(commit.type);              // 'feat'
+console.log(commit.scope);             // 'api'
+console.log(commit.breaking);          // true  (! marker)
+console.log(commit.hasBreakingChange); // true  (marker OR footer)
 
-if (!result.valid) {
-  console.error(result.errors);
+// Validate against a config
+const config = await loadConfig();
+const report = validate('feat: add login', config);
+
+if (!report.valid) {
+  for (const result of report.results) {
+    for (const problem of result.problems) {
+      console.error(`[${result.ruleName}] ${problem.message}`);
+    }
+  }
 }
+
+// Create a custom rule
+const noWipRule = defineRule({
+  meta: {
+    name: 'no-wip',
+    description: 'Subject must not start with WIP',
+    category: 'content',
+    requiresGit: false,
+    defaultSeverity: 'error',
+  },
+  validate({ commit }) {
+    if (commit.subject?.toUpperCase().startsWith('WIP')) {
+      return [{ message: 'WIP commits are not allowed.', suggestion: 'Remove the WIP prefix.' }];
+    }
+    return [];
+  },
+});
 ```
+
+## License
+
+MIT

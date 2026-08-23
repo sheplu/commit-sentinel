@@ -17,6 +17,12 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "engines": {
     "node": ">=24.0.0"
   },
@@ -27,18 +33,30 @@
   ],
   "scripts": {
     "start": "node index.ts",
-    "test": "node --test --test-reporter=spec 'test/**/*.test.ts'",
-    "test:unit": "node --test 'test/unit/**/*.test.ts'",
-    "test:integration": "node --test 'test/integration/**/*.test.ts'",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'test/**/*.test.ts'",
+    "test": "node --test --test-reporter=spec 'tests/**/*.test.ts'",
+    "test:unit": "node --test 'tests/unit/**/*.test.ts'",
+    "test:integration": "node --test 'tests/integration/**/*.test.ts'",
+    "test:smoke": "node --test 'tests/smoke/**/*.test.ts'",
+    "test:e2e": "node --test 'tests/e2e/**/*.test.ts'",
+    "test:fuzz": "node --test 'tests/fuzz/**/*.test.ts'",
+    "test:unit:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/unit.lcov 'tests/unit/**/*.test.ts'",
+    "test:integration:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/integration.lcov 'tests/integration/**/*.test.ts'",
+    "test:smoke:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/smoke.lcov 'tests/smoke/**/*.test.ts'",
+    "test:e2e:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/e2e.lcov 'tests/e2e/**/*.test.ts'",
+    "test:fuzz:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/fuzz.lcov 'tests/fuzz/**/*.test.ts'",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'tests/**/*.test.ts'",
+    "coverage:report": "node scripts/coverage-report.ts",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.build.json",
+    "docs:build": "typedoc",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "fast-check": "^4.9.0",
     "oxlint": "^1.66.0",
+    "typedoc": "^0.28.20",
     "typescript": "^6.0.3"
   }
 }
