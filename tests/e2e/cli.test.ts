@@ -127,15 +127,17 @@ describe('CLI e2e', () => {
     assert.match(result.stdout, /No commits found/);
   });
 
-  it('validates range with --json output', async () => {
+  it('validates range with --json output as array', async () => {
     const result = await runCli(['--range', 'HEAD~1..HEAD', '--json']);
     assert.ok(result.exitCode === 0 || result.exitCode === 2);
-    // Output should be parseable JSON
     const output = result.stdout || result.stderr;
-    assert.doesNotThrow(() => JSON.parse(output));
+    const parsed = JSON.parse(output);
+    assert.ok(Array.isArray(parsed));
+    assert.ok(parsed.length > 0);
+    assert.equal(typeof parsed[0].valid, 'boolean');
   });
 
-  it('validates range with --sarif output', async () => {
+  it('validates range with --sarif output as single document', async () => {
     const result = await runCli(['--range', 'HEAD~1..HEAD', '--sarif']);
     assert.ok(result.exitCode === 0 || result.exitCode === 2);
     const output = result.stdout || result.stderr;

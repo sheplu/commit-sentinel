@@ -15,7 +15,20 @@ export const authorEmailRule = defineRule<AuthorEmailOptions>({
   validate({ git, options }) {
     if (git === null) return [];
     const pattern = options.pattern ?? '.+';
-    const re = new RegExp(pattern);
+
+    let re: RegExp;
+    try {
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+      re = new RegExp(pattern);
+    } catch {
+      return [
+        {
+          message: `Invalid author-email pattern: "${pattern}".`,
+          suggestion: 'Check the regex syntax in your config.',
+        },
+      ];
+    }
+
     if (re.test(git.authorEmail)) return [];
     return [
       {

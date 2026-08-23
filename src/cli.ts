@@ -175,11 +175,16 @@ async function validateRange(
     if (!report.valid) hasError = true;
   }
 
-  const outputParts: string[] = [];
-  for (const report of reports) {
-    outputParts.push(formatter.format(report));
+  // For structured formats, wrap multiple reports in a single valid document.
+  let output: string;
+  if (formatter === jsonFormatter) {
+    output = JSON.stringify(reports, null, 2) + '\n';
+  } else if (formatter === sarifFormatter) {
+    // Merge all results into a single SARIF run.
+    output = formatter.format(mergeReports(reports));
+  } else {
+    output = reports.map((r) => formatter.format(r)).join('');
   }
-  const output = outputParts.join('');
 
   if (hasError) {
     return { exitCode: 2, stdout: '', stderr: output };
@@ -197,6 +202,18 @@ async function resolveMessage(values: {
   if (values.file !== undefined) return readFile(values.file, 'utf8');
   if (values.stdin) return readStdin();
   return readCommitMessage(values.commit ?? 'HEAD');
+}
+
+function mergeReports(reports: ValidationReport[]): ValidationReport {
+  const merged: ValidationReport = {
+    valid: reports.every((r) => r.valid),
+    commit: reports[0]!.commit,
+    results: reports.flatMap((r) => r.results),
+    errorCount: reports.reduce((sum, r) => sum + r.errorCount, 0),
+    warningCount: reports.reduce((sum, r) => sum + r.warningCount, 0),
+    skippedGitRules: [...new Set(reports.flatMap((r) => r.skippedGitRules))],
+  };
+  return merged;
 }
 
 function readStdin(): Promise<string> {

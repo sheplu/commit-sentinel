@@ -105,11 +105,11 @@ describe('CLI run()', () => {
     assert.match(result.stdout, /No commits found/);
   });
 
-  it('validates JSON output for range', async () => {
+  it('validates JSON output for range is a valid array', async () => {
     const result = await run(['--range', 'HEAD~1..HEAD', '--json']);
     assert.ok(result.exitCode === 0 || result.exitCode === 2);
-    // Should be valid JSON (one report per commit)
     const output = result.stdout || result.stderr;
-    assert.ok(output.length > 0);
+    const parsed = JSON.parse(output);
+    assert.ok(Array.isArray(parsed));
   });
 });
