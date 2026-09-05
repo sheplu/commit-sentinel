@@ -1,7 +1,8 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { ActiveSeverity, RuleConfig } from '../rules/types.ts';
+import type { ActiveSeverity, Rule, RuleConfig } from '../rules/types.ts';
 import type { UserConfig } from './define-config.ts';
+import { builtinRules } from '../rules/registry.ts';
 import { getPreset, strict } from './presets.ts';
 
 /** A single rule entry after preset merging and normalization. */
@@ -16,6 +17,11 @@ export interface ResolvedRuleEntry {
 export interface ResolvedConfig {
   /** Map of rule name → resolved entry. Rules set to `'off'` are excluded. */
   rules: Record<string, ResolvedRuleEntry>;
+  /**
+   * Merged rule registry: built-in rules plus any `plugins` from the user
+   * config. When absent, the runner falls back to the built-in rules only.
+   */
+  ruleRegistry?: ReadonlyMap<string, Rule>;
 }
 
 const CONFIG_FILE = 'commit-sentinel.config.ts';
@@ -26,13 +32,17 @@ const CONFIG_FILE = 'commit-sentinel.config.ts';
  * Resolution order:
  * 1. Look for `commit-sentinel.config.ts` in {@link cwd} (or an explicit {@link configPath}).
  * 2. If found, `import()` it and read its default export.
- * 3. Resolve the `extends` preset, then merge user overrides on top.
- * 4. If no config file is found, fall back to the `strict` preset.
+ * 3. Merge `plugins` into the rule registry and auto-enable each plugin rule
+ *    at its `meta.defaultSeverity`.
+ * 4. Resolve the `extends` preset, then merge user overrides on top.
+ * 5. If no config file is found, fall back to the `strict` preset.
  *
  * @param cwd - Directory to search for the config file. Defaults to `process.cwd()`.
  * @param configPath - Explicit path to a config file (relative to `cwd`).
  * @returns A fully resolved config with only active rules.
- * @throws When an explicit `configPath` does not exist, or the config file fails to import.
+ * @throws When an explicit `configPath` does not exist, the config file fails
+ * to import, a plugin rule is malformed or its name collides with a built-in
+ * rule or another plugin, or a `rules` entry references an unknown rule.
  */
 export async function loadConfig(cwd?: string, configPath?: string): Promise<ResolvedConfig> {
   const dir = cwd ?? process.cwd();
@@ -76,11 +86,24 @@ function resolveConfig(
   userConfig: UserConfig,
   preset: Record<string, RuleConfig>,
 ): ResolvedConfig {
+  const plugins = userConfig.plugins ?? [];
+  const ruleRegistry = buildRegistry(plugins);
+
   const merged: Record<string, RuleConfig> = { ...preset };
+
+  // Auto-enable plugin rules at their declared default severity
+  for (const plugin of plugins) {
+    merged[plugin.meta.name] = plugin.meta.defaultSeverity;
+  }
 
   // Apply user overrides
   if (userConfig.rules) {
     for (const [name, config] of Object.entries(userConfig.rules)) {
+      if (!ruleRegistry.has(name)) {
+        throw new Error(
+          `Unknown rule "${name}" in config: not a built-in rule or a plugin rule.`,
+        );
+      }
       merged[name] = config;
     }
   }
@@ -94,7 +117,34 @@ function resolveConfig(
     }
   }
 
-  return { rules };
+  return { rules, ruleRegistry };
+}
+
+function buildRegistry(plugins: readonly Rule[]): ReadonlyMap<string, Rule> {
+  if (plugins.length === 0) return builtinRules;
+
+  const registry = new Map(builtinRules);
+  for (const plugin of plugins) {
+    if (!isRule(plugin)) {
+      throw new Error(
+        'Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function).',
+      );
+    }
+    const name = plugin.meta.name;
+    if (builtinRules.has(name)) {
+      throw new Error(`Plugin rule "${name}" conflicts with a built-in rule of the same name.`);
+    }
+    if (registry.has(name)) {
+      throw new Error(`Duplicate plugin rule "${name}": plugin rule names must be unique.`);
+    }
+    registry.set(name, plugin);
+  }
+  return registry;
+}
+
+function isRule(value: unknown): value is Rule {
+  const candidate = value as { meta?: { name?: unknown }; validate?: unknown } | null;
+  return typeof candidate?.meta?.name === 'string' && typeof candidate.validate === 'function';
 }
 
 function normalizeRuleConfig(config: RuleConfig): ResolvedRuleEntry | null {

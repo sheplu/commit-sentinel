@@ -40,6 +40,43 @@ describe('CLI run()', () => {
     assert.equal(result.stderr, '');
   });
 
+  it('accepts revert type with the conventional preset', async () => {
+    const configPath = join(dir, 'conventional.config.ts');
+    await writeFile(configPath, `export default { extends: 'conventional' };`);
+
+    const result = await run(['--message', 'revert: undo the login change', '--config', configPath]);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+  });
+
+  it('hardened preset rejects a scope-less, body-less message', async () => {
+    const configPath = join(dir, 'hardened.config.ts');
+    await writeFile(configPath, `export default { extends: 'hardened' };`);
+
+    const result = await run(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /scope-required/);
+    assert.match(result.stderr, /body-required/);
+  });
+
+  it('hardened preset accepts a fully compliant message', async () => {
+    const configPath = join(dir, 'hardened.config.ts');
+    await writeFile(configPath, `export default { extends: 'hardened' };`);
+
+    const message = 'feat(api): add login\n\nAdd the login flow with session handling.';
+    const result = await run(['--message', message, '--config', configPath]);
+    assert.equal(result.exitCode, 0);
+  });
+
+  it('rejects revert type in the strict preset', async () => {
+    const configPath = join(dir, 'strict.config.ts');
+    await writeFile(configPath, `export default { extends: 'strict' };`);
+
+    const result = await run(['--message', 'revert: undo the login change', '--config', configPath]);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /Unsupported commit type "revert"/);
+  });
+
   it('exits 2 for invalid message', async () => {
     const result = await run(['--message', 'bad message']);
     assert.equal(result.exitCode, 2);
@@ -111,5 +148,68 @@ describe('CLI run()', () => {
     const output = result.stdout || result.stderr;
     const parsed = JSON.parse(output);
     assert.ok(Array.isArray(parsed));
+  });
+
+  describe('custom rules via plugins', () => {
+    const pluginConfig = `
+      export default {
+        extends: 'strict',
+        plugins: [{
+          meta: {
+            name: 'no-wip',
+            description: 'Subject must not start with WIP',
+            category: 'content',
+            requiresGit: false,
+            defaultSeverity: 'error',
+          },
+          validate({ commit }) {
+            if (commit.subject?.toUpperCase().startsWith('WIP')) {
+              return [{ message: 'WIP commits are not allowed.' }];
+            }
+            return [];
+          },
+        }],
+      };
+    `;
+
+    it('exits 2 when a plugin rule fails', async () => {
+      const configPath = join(dir, 'plugin.config.ts');
+      await writeFile(configPath, pluginConfig);
+
+      const result = await run(['--message', 'feat: WIP do not merge', '--config', configPath]);
+      assert.equal(result.exitCode, 2);
+      assert.match(result.stderr, /no-wip/);
+      assert.match(result.stderr, /WIP commits are not allowed/);
+    });
+
+    it('exits 0 when a plugin rule passes', async () => {
+      const configPath = join(dir, 'plugin.config.ts');
+      await writeFile(configPath, pluginConfig);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 0);
+    });
+
+    it('exits 1 when a plugin collides with a builtin rule', async () => {
+      const configPath = join(dir, 'collision.config.ts');
+      await writeFile(configPath, `
+        export default {
+          plugins: [{
+            meta: {
+              name: 'format',
+              description: 'shadow builtin',
+              category: 'format',
+              requiresGit: false,
+              defaultSeverity: 'error',
+            },
+            validate() { return []; },
+          }],
+        };
+      `);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, /conflicts with a built-in rule/);
+    });
   });
 });

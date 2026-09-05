@@ -53,8 +53,9 @@ export default defineConfig({
 
 1. Looks for `commit-sentinel.config.ts` in the current working directory
 2. If found, loads it via native `import()` and reads the default export
-3. Resolves the `extends` preset, then applies user `rules` on top
-4. If no config file is found, falls back to the `strict` preset
+3. Merges custom `plugins` rules into the rule registry
+4. Resolves the `extends` preset, then applies user `rules` on top
+5. If no config file is found, falls back to the `strict` preset
 
 > **Note:** The config file is looked up in the current working directory only. Monorepo directory-tree walking is planned for a future release.
 
@@ -72,13 +73,51 @@ Each rule can be set to one of three levels:
 
 Rules can be configured as a bare severity (`'error'`) or as a tuple with options (`['warn', { max: 72 }]`).
 
+### Custom rules
+
+Create rules with `defineRule()` and register them through the `plugins` field:
+
+```typescript
+import { defineConfig, defineRule } from '@sheplu/commit-sentinel';
+
+const noWipRule = defineRule({
+  meta: {
+    name: 'no-wip',
+    description: 'Subject must not start with WIP',
+    category: 'content',
+    requiresGit: false,
+    defaultSeverity: 'error',
+  },
+  validate({ commit }) {
+    if (commit.subject?.toUpperCase().startsWith('WIP')) {
+      return [{ message: 'WIP commits are not allowed.', suggestion: 'Remove the WIP prefix.' }];
+    }
+    return [];
+  },
+});
+
+export default defineConfig({
+  extends: 'conventional',
+  plugins: [noWipRule],
+});
+```
+
+A plugin rule is **enabled automatically** at its `meta.defaultSeverity`; an entry under `rules` (keyed by the rule's `meta.name`) overrides its severity/options or turns it `'off'`. Name collisions and unknown rule names fail at config load (exit code 1).
+
+**Full guide — API reference, typed options, git-metadata rules, recipes, testing, distribution: [PLUGINS.md](./PLUGINS.md)**
+
 ## Presets
 
 | Preset | Types | Notable defaults |
 |--------|-------|-----------------|
 | **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100 |
-| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore` | subject-case: warn@lower, header-max-length: warn@100 |
-| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `test` | subject-case: error@lower, header-max-length: error@100 |
+| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100 |
+| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100 |
+| **hardened** | same as conventional | **all 13 rules at error** — subject-max: 72, header/body lines: 100, scope + body required, breaking-change footer required, signed commits |
+
+> **Note:** `revert` (in the conventional, angular, and hardened presets) only covers explicit `revert: …` / `revert(scope): …` messages. Git's auto-generated `Revert "…"` messages do not match the `format` rule ([#24](https://github.com/sheplu/commit-sentinel/issues/24)).
+
+> **Note:** In the hardened preset, `scope-enum` and `author-email` are enabled but pass-through with their defaults (any scope, any email) — override their options to lock them down, e.g. `'author-email': ['error', { pattern: '^.+@company\\.com$' }]`.
 
 ## Rules
 
@@ -265,7 +304,16 @@ const noWipRule = defineRule({
     return [];
   },
 });
+
+// Register it via the `plugins` field of commit-sentinel.config.ts —
+// loadConfig() merges it into the rule registry and validate() runs it
+export default defineConfig({
+  extends: 'strict',
+  plugins: [noWipRule],
+});
 ```
+
+See [PLUGINS.md](./PLUGINS.md) for the full custom-rule guide.
 
 ## License
 

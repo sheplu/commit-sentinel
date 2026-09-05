@@ -40,6 +40,10 @@ export interface ValidationReport {
  *
  * Pipeline: parse → iterate enabled rules → collect problems → build report.
  *
+ * Rules are looked up in {@link ResolvedConfig.ruleRegistry} (built-ins plus
+ * any config `plugins`), falling back to the built-in rules when the config
+ * carries no registry.
+ *
  * Rules with `requiresGit: true` are silently skipped (and listed in
  * {@link ValidationReport.skippedGitRules}) when {@link git} is `null`.
  *
@@ -54,13 +58,14 @@ export function validate(
   git?: GitMeta | null,
 ): ValidationReport {
   const commit = parseCommit(message);
+  const registry = config.ruleRegistry ?? builtinRules;
   const results: RuleResult[] = [];
   const skippedGitRules: string[] = [];
   let errorCount = 0;
   let warningCount = 0;
 
   for (const [ruleName, entry] of Object.entries(config.rules)) {
-    const rule = builtinRules.get(ruleName);
+    const rule = registry.get(ruleName);
     if (!rule) continue;
 
     if (rule.meta.requiresGit && (git === null || git === undefined)) {

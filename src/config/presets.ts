@@ -19,7 +19,7 @@ export const conventional: Preset = {
     {
       allowed: [
         'feat', 'fix', 'build', 'ci', 'docs',
-        'perf', 'refactor', 'style', 'test', 'chore',
+        'perf', 'refactor', 'style', 'test', 'chore', 'revert',
       ],
     },
   ],
@@ -34,7 +34,7 @@ export const angular: Preset = {
   'type-enum': [
     'error',
     {
-      allowed: ['build', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'test'],
+      allowed: ['build', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'test'],
     },
   ],
   'header-max-length': ['error', { max: 100 }],
@@ -42,12 +42,43 @@ export const angular: Preset = {
   'subject-case': ['error', { case: 'lower' }],
 };
 
-const presets: Record<string, Preset> = { strict, conventional, angular };
+/**
+ * Hardened preset: every built-in rule enabled at `error` severity.
+ *
+ * Rules whose defaults are pass-through stay configurable: `scope-enum`
+ * allows any scope and `author-email` matches any email until their
+ * options are overridden.
+ */
+export const hardened: Preset = {
+  'format': 'error',
+  'type-enum': [
+    'error',
+    {
+      allowed: [
+        'feat', 'fix', 'build', 'ci', 'docs',
+        'perf', 'refactor', 'style', 'test', 'chore', 'revert',
+      ],
+    },
+  ],
+  'scope-enum': 'error',
+  'scope-required': 'error',
+  'subject-max-length': ['error', { max: 72 }],
+  'subject-min-length': ['error', { min: 1 }],
+  'subject-case': ['error', { case: 'lower' }],
+  'header-max-length': ['error', { max: 100 }],
+  'body-required': 'error',
+  'body-max-line-length': ['error', { max: 100 }],
+  'breaking-change': ['error', { requireFooter: true }],
+  'author-email': 'error',
+  'signed': 'error',
+};
+
+const presets: Record<string, Preset> = { strict, conventional, angular, hardened };
 
 /**
  * Look up a built-in preset by name.
  *
- * @param name - One of `"strict"`, `"conventional"`, or `"angular"`.
+ * @param name - One of `"strict"`, `"conventional"`, `"angular"`, or `"hardened"`.
  * @returns The preset's rule configuration map.
  * @throws When the name does not match any built-in preset.
  */
