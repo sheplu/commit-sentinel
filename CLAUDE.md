@@ -15,7 +15,7 @@ CLI tool and library to validate git commit messages against configurable rules.
 
 ```
 commit-sentinel.config.ts (user config)
-  → config/loader.ts (import() + preset merge)
+  → config/loader.ts (import() + preset merge + plugins registry)
     → runner.ts (orchestrator)
       → parser.ts (message → ParsedCommit)
       → rules/*.ts (each implements Rule interface via defineRule())
@@ -27,7 +27,8 @@ commit-sentinel.config.ts (user config)
 - **Rules are pure functions** — `defineRule<Options>()` provides type inference
 - **Git-metadata rules** (`author-email`, `signed`) declare `requiresGit: true` and are skipped when git metadata is unavailable
 - **Config** loaded via native `import()` from `commit-sentinel.config.ts` — no config loaders
-- **Presets:** strict (default), conventional, angular
+- **Custom rules:** `plugins: Rule[]` in config, merged with builtins into `ResolvedConfig.ruleRegistry`; auto-enabled at `meta.defaultSeverity`, overridable via `rules`; name collisions and unknown rule names throw at load
+- **Presets:** strict (default), conventional, angular, hardened (all 13 rules at error)
 - **Version:** single source of truth in `src/version.ts` — must match `package.json` (checked by `scripts/check-version.ts`)
 
 ## Test Categories

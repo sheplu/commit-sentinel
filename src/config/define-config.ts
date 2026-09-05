@@ -1,4 +1,4 @@
-import type { RuleConfig } from '../rules/types.ts';
+import type { Rule, RuleConfig } from '../rules/types.ts';
 
 /**
  * User-facing configuration for commit-sentinel.
@@ -8,10 +8,27 @@ import type { RuleConfig } from '../rules/types.ts';
  * @example
  * ```ts
  * // commit-sentinel.config.ts
- * import { defineConfig } from '@sheplu/commit-sentinel';
+ * import { defineConfig, defineRule } from '@sheplu/commit-sentinel';
+ *
+ * const noWipRule = defineRule({
+ *   meta: {
+ *     name: 'no-wip',
+ *     description: 'Subject must not start with WIP',
+ *     category: 'content',
+ *     requiresGit: false,
+ *     defaultSeverity: 'error',
+ *   },
+ *   validate({ commit }) {
+ *     if (commit.subject?.toUpperCase().startsWith('WIP')) {
+ *       return [{ message: 'WIP commits are not allowed.' }];
+ *     }
+ *     return [];
+ *   },
+ * });
  *
  * export default defineConfig({
  *   extends: 'conventional',
+ *   plugins: [noWipRule],
  *   rules: {
  *     'subject-max-length': ['warn', { max: 72 }],
  *     'signed': 'off',
@@ -20,10 +37,19 @@ import type { RuleConfig } from '../rules/types.ts';
  * ```
  */
 export interface UserConfig {
-  /** Name of a built-in preset to extend (`"strict"`, `"conventional"`, or `"angular"`). */
+  /** Name of a built-in preset to extend (`"strict"`, `"conventional"`, `"angular"`, or `"hardened"`). */
   extends?: string;
   /** Per-rule overrides applied on top of the preset. */
   rules?: Record<string, RuleConfig>;
+  /**
+   * Custom rules created with `defineRule()`.
+   *
+   * Each plugin rule is enabled automatically at its `meta.defaultSeverity`.
+   * Add an entry under {@link rules} (keyed by the rule's `meta.name`) to
+   * override its severity/options or turn it `'off'`. Plugin names must not
+   * collide with built-in rules or with each other.
+   */
+  plugins?: Rule[];
 }
 
 /**

@@ -1,9 +1,14 @@
 import { strict as assert } from 'node:assert';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { runCli } from '../helpers/spawn.ts';
+
+const INDEX_URL = pathToFileURL(
+  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
+).href;
 
 describe('CLI e2e', () => {
   let dir: string;
@@ -179,6 +184,67 @@ describe('CLI e2e', () => {
     const result = await runCli(['--message', 'fix: something', '--config', configPath]);
     assert.equal(result.exitCode, 2);
     assert.match(result.stderr, /Unsupported commit type "fix"/);
+  });
+
+  // ── custom rules (plugins) ──
+
+  const pluginConfigContent = `
+    import { defineRule } from '${INDEX_URL}';
+
+    const noWipRule = defineRule({
+      meta: {
+        name: 'no-wip',
+        description: 'Subject must not start with WIP',
+        category: 'content',
+        requiresGit: false,
+        defaultSeverity: 'error',
+      },
+      validate({ commit }) {
+        if (commit.subject?.toUpperCase().startsWith('WIP')) {
+          return [{ message: 'WIP commits are not allowed.', suggestion: 'Remove the WIP prefix.' }];
+        }
+        return [];
+      },
+    });
+
+    export default {
+      extends: 'strict',
+      plugins: [noWipRule],
+    };
+  `;
+
+  it('runs a defineRule() plugin from config and exits 2 on violation', async () => {
+    const configPath = join(dir, 'plugin.config.ts');
+    await writeFile(configPath, pluginConfigContent);
+
+    const result = await runCli(['--message', 'feat: WIP do not merge', '--config', configPath]);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /no-wip/);
+    assert.match(result.stderr, /WIP commits are not allowed/);
+  });
+
+  it('exits 0 when the plugin rule passes', async () => {
+    const configPath = join(dir, 'plugin.config.ts');
+    await writeFile(configPath, pluginConfigContent);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 0);
+  });
+
+  it('exits 1 for an unknown rule name in config', async () => {
+    const configPath = join(dir, 'unknown-rule.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'no-such-rule': 'error',
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Unknown rule "no-such-rule"/);
   });
 
   // ── negative / error paths ──
