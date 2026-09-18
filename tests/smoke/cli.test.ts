@@ -150,6 +150,27 @@ describe('CLI run()', () => {
     assert.ok(Array.isArray(parsed));
   });
 
+  describe('agent-attribution via --message', () => {
+    it('rejects a commit with Claude attribution', async () => {
+      const configPath = join(dir, 'agent.config.ts');
+      await writeFile(configPath, `export default { extends: 'strict', rules: { 'agent-attribution': 'error' } };`);
+
+      const message = 'feat: add login\n\nBody text.\n\nCo-Authored-By: Claude <noreply@anthropic.com>';
+      const result = await run(['--message', message, '--config', configPath]);
+      assert.equal(result.exitCode, 2);
+      assert.match(result.stderr, /agent-attribution/);
+    });
+
+    it('passes when the agent is in the allow list', async () => {
+      const configPath = join(dir, 'agent-allow.config.ts');
+      await writeFile(configPath, `export default { extends: 'strict', rules: { 'agent-attribution': ['error', { allow: ['claude'] }] } };`);
+
+      const message = 'feat: add login\n\nBody text.\n\nCo-Authored-By: Claude <noreply@anthropic.com>';
+      const result = await run(['--message', message, '--config', configPath]);
+      assert.equal(result.exitCode, 0);
+    });
+  });
+
   describe('custom rules via plugins', () => {
     const pluginConfig = `
       export default {

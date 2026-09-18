@@ -10,6 +10,7 @@ import { authorEmailRule } from '../../../src/rules/author-email.ts';
 import { breakingChangeRule } from '../../../src/rules/breaking-change.ts';
 import { typeEnumRule } from '../../../src/rules/type-enum.ts';
 import { scopeEnumRule } from '../../../src/rules/scope-enum.ts';
+import { agentAttributionRule } from '../../../src/rules/agent-attribution.ts';
 
 describe('rule option defaults', () => {
   it('subject-max-length defaults to 72', () => {
@@ -87,6 +88,15 @@ describe('rule option defaults', () => {
   it('scope-enum with no allowed list passes any scope', () => {
     const problems = scopeEnumRule.validate({
       commit: parseCommit('feat(anything): goes'),
+      git: null,
+      options: {},
+    });
+    assert.equal(problems.length, 0);
+  });
+
+  it('agent-attribution defaults block all agents on clean commit', () => {
+    const problems = agentAttributionRule.validate({
+      commit: parseCommit('feat: add login'),
       git: null,
       options: {},
     });

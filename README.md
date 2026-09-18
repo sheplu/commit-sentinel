@@ -113,7 +113,7 @@ A plugin rule is **enabled automatically** at its `meta.defaultSeverity`; an ent
 | **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100 |
 | **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100 |
 | **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100 |
-| **hardened** | same as conventional | **all 13 rules at error** — subject-max: 72, header/body lines: 100, scope + body required, breaking-change footer required, signed commits |
+| **hardened** | same as conventional | **all 14 rules at error** — subject-max: 72, header/body lines: 100, scope + body required, breaking-change footer required, signed commits, agent attribution blocked |
 
 > **Note:** `revert` (in the conventional, angular, and hardened presets) only covers explicit `revert: …` / `revert(scope): …` messages. Git's auto-generated `Revert "…"` messages do not match the `format` rule ([#24](https://github.com/sheplu/commit-sentinel/issues/24)).
 
@@ -136,6 +136,9 @@ A plugin rule is **enabled automatically** at its `meta.defaultSeverity`; an ent
 | `breaking-change` | content | `{ requireFooter?: boolean }` | Footer not required |
 | `author-email` | git | `{ pattern?: string }` | Match any (`.+`) |
 | `signed` | git | — | Signing not required |
+| `agent-attribution` | content | `{ allow?: string[], patterns?: string[] }` | Block all known AI-agent markers |
+
+> **`agent-attribution` known agents:** `claude`, `copilot`, `cursor`, `gemini`, `codex`, `vibe` (Mistral), `aider`, `opencode`, `windsurf` (Cascade). Use `allow` to exempt specific agents; `patterns` to add extra deny regexes for agents not yet in the built-in set. Unknown IDs in `allow` fail at validation time.
 
 **Git-metadata rules** (`author-email`, `signed`) require an actual git commit ref. They are automatically skipped (with a notice) when validating message text directly (`--message`, `--stdin`, `--file`).
 

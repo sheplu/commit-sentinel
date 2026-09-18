@@ -12,8 +12,8 @@ import { bodyMaxLineLengthRule } from './body-max-line-length.ts';
 import { breakingChangeRule } from './breaking-change.ts';
 import { authorEmailRule } from './author-email.ts';
 import { signedRule } from './signed.ts';
+import { agentAttributionRule } from './agent-attribution.ts';
 
-/** All 13 built-in rules, keyed by name. */
 export const builtinRules: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   ['format', formatRule],
   ['type-enum', typeEnumRule],
@@ -28,6 +28,7 @@ export const builtinRules: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   ['breaking-change', breakingChangeRule],
   ['author-email', authorEmailRule],
   ['signed', signedRule],
+  ['agent-attribution', agentAttributionRule],
 ]);
 
 /**
