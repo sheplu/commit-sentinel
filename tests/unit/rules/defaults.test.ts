@@ -94,13 +94,14 @@ describe('rule option defaults', () => {
     assert.equal(problems.length, 0);
   });
 
-  it('agent-attribution defaults block all agents on clean commit', () => {
+  it('agent-attribution defaults block all known agents', () => {
     const problems = agentAttributionRule.validate({
-      commit: parseCommit('feat: add login'),
+      commit: parseCommit('feat: add login\n\nCo-Authored-By: Claude <noreply@anthropic.com>'),
       git: null,
       options: {},
     });
-    assert.equal(problems.length, 0);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /Claude Code/);
   });
 });
 
