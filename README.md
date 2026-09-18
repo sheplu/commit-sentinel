@@ -138,7 +138,7 @@ A plugin rule is **enabled automatically** at its `meta.defaultSeverity`; an ent
 | `signed` | git | — | Signing not required |
 | `agent-attribution` | content | `{ allow?: string[], patterns?: string[] }` | Block all known AI-agent markers |
 
-> **`agent-attribution` known agents:** `claude`, `copilot`, `cursor`, `gemini`, `codex`, `vibe` (Mistral), `aider`, `opencode`, `windsurf` (Cascade). Use `allow` to exempt specific agents; `patterns` to add extra deny regexes for agents not yet in the built-in set. Unknown IDs in `allow` fail at validation time.
+> **`agent-attribution` known agents:** `claude`, `copilot`, `cursor`, `gemini`, `codex`, `vibe` (Mistral), `aider`, `opencode`, `windsurf` (Cascade). Use `allow` to exempt specific agents; `patterns` to add extra deny regexes for agents not yet in the built-in set. Unknown IDs in `allow` fail at validation time. `patterns` entries are plain regex sources — the `i` and `m` flags are applied automatically.
 
 **Git-metadata rules** (`author-email`, `signed`) require an actual git commit ref. They are automatically skipped (with a notice) when validating message text directly (`--message`, `--stdin`, `--file`).
 

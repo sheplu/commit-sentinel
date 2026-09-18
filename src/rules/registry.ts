@@ -14,6 +14,7 @@ import { authorEmailRule } from './author-email.ts';
 import { signedRule } from './signed.ts';
 import { agentAttributionRule } from './agent-attribution.ts';
 
+/** All 14 built-in rules, keyed by name. */
 export const builtinRules: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   ['format', formatRule],
   ['type-enum', typeEnumRule],
