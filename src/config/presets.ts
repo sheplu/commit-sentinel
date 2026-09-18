@@ -71,6 +71,7 @@ export const hardened: Preset = {
   'breaking-change': ['error', { requireFooter: true }],
   'author-email': 'error',
   'signed': 'error',
+  'agent-attribution': 'error',
 };
 
 const presets: Record<string, Preset> = { strict, conventional, angular, hardened };
