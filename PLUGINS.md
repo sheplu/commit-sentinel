@@ -151,6 +151,39 @@ const issueReferenceRule = defineRule<{ pattern?: string }>({
 
 Users of the rule then configure it like any built-in: `'issue-reference-required': ['warn', { pattern: 'JIRA-\\d+' }]`.
 
+## Validating options
+
+Define `validateOptions()` alongside `validate()` to catch bad rule options early. The loader calls it at config load for every enabled rule; any returned problem is a hard config error (exit code 1), regardless of the rule's severity:
+
+```typescript
+const issueReferenceRule = defineRule<{ pattern?: string }>({
+  meta: {
+    name: 'issue-reference-required',
+    description: 'Commit must reference an issue',
+    category: 'content',
+    requiresGit: false,
+    defaultSeverity: 'error',
+  },
+  validateOptions(options) {
+    try {
+      new RegExp(options.pattern ?? '#\\d+');
+      return [];
+    } catch {
+      return [{ message: '"pattern" is not a valid regex.', suggestion: 'Fix the regex in your config.' }];
+    }
+  },
+  validate({ commit, options }) {
+    const re = new RegExp(options.pattern ?? '#\\d+');
+    // ...
+  },
+});
+```
+
+Two requirements to keep in mind:
+
+- **`validateOptions` must accept `{}`.** Plugin rules are auto-enabled with empty options — the plugin API has no way to declare default option values — so treat every absent field as "use my default". A rule whose `validateOptions` rejects `{}` cannot be loaded at all.
+- **`validate` should not throw on malformed options.** Configs built programmatically (bypassing `loadConfig`) skip load-time checks, so report a problem instead of throwing.
+
 ## Git-metadata rules
 
 Set `requiresGit: true` when your rule needs more than the message text. The `git` context field is populated when validating real commits (`--commit`, `--range`, `--base`, or the default `HEAD`), and the rule is **automatically skipped** — never failed — when only text is available (`--message`, `--stdin`, `--file`). Skipped rules are listed in the report's `skippedGitRules` and shown as a notice:

@@ -81,6 +81,10 @@ const KNOWN_AGENTS: ReadonlyMap<string, AgentEntry> = new Map([
 
 export const KNOWN_AGENT_IDS: ReadonlySet<string> = new Set(KNOWN_AGENTS.keys());
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
 export const agentAttributionRule = defineRule<AgentAttributionOptions>({
   meta: {
     name: 'agent-attribution',
@@ -92,26 +96,46 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
   validateOptions(options) {
     const problems: { message: string; suggestion?: string }[] = [];
 
-    const allowSet = new Set(options.allow ?? []);
-    const unknownIds = [...allowSet].filter((id) => !KNOWN_AGENTS.has(id));
-    if (unknownIds.length > 0) {
-      const label = unknownIds.length === 1 ? 'Unknown agent ID' : 'Unknown agent IDs';
-      const quoted = unknownIds.map((id) => `"${id}"`).join(', ');
+    const allowValid = options.allow === undefined || isStringArray(options.allow);
+    if (!allowValid) {
       problems.push({
-        message: `${label} ${quoted} in allow list. Known agents: ${[...KNOWN_AGENTS.keys()].join(', ')}.`,
+        message: '"allow" must be an array of agent ID strings.',
         suggestion: 'Check the agent-attribution allow option in your config.',
       });
     }
 
-    for (const patternStr of options.patterns ?? []) {
-      try {
-        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-        new RegExp(patternStr, 'im');
-      } catch {
+    const patternsValid = options.patterns === undefined || isStringArray(options.patterns);
+    if (!patternsValid) {
+      problems.push({
+        message: '"patterns" must be an array of regex strings.',
+        suggestion: 'Check the agent-attribution patterns option in your config.',
+      });
+    }
+
+    if (allowValid && options.allow !== undefined) {
+      const allowSet = new Set(options.allow);
+      const unknownIds = [...allowSet].filter((id) => !KNOWN_AGENTS.has(id));
+      if (unknownIds.length > 0) {
+        const label = unknownIds.length === 1 ? 'Unknown agent ID' : 'Unknown agent IDs';
+        const quoted = unknownIds.map((id) => `"${id}"`).join(', ');
         problems.push({
-          message: `Invalid agent-attribution pattern: "${patternStr}".`,
-          suggestion: 'Check the regex syntax in your config.',
+          message: `${label} ${quoted} in allow list. Known agents: ${[...KNOWN_AGENTS.keys()].join(', ')}.`,
+          suggestion: 'Check the agent-attribution allow option in your config.',
         });
+      }
+    }
+
+    if (patternsValid && options.patterns !== undefined) {
+      for (const patternStr of options.patterns) {
+        try {
+          // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+          new RegExp(patternStr, 'im');
+        } catch {
+          problems.push({
+            message: `Invalid agent-attribution pattern: "${patternStr}".`,
+            suggestion: 'Check the regex syntax in your config.',
+          });
+        }
       }
     }
 
@@ -135,8 +159,18 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
     }
 
     for (const patternStr of options.patterns ?? []) {
-      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-      const re = new RegExp(patternStr, 'im');
+      let re: RegExp;
+      try {
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+        re = new RegExp(patternStr, 'im');
+      } catch {
+        problems.push({
+          message: `Invalid agent-attribution pattern: "${patternStr}".`,
+          suggestion: 'Check the regex syntax in your config.',
+        });
+        continue;
+      }
+
       if (re.test(commit.raw)) {
         problems.push({
           message: `Commit matches custom agent-attribution pattern /${patternStr}/.`,

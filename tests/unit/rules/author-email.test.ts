@@ -34,6 +34,16 @@ describe('author-email rule', () => {
     assert.match(problems[0]!.message, /does not match pattern/);
   });
 
+  it('reports an invalid regex as a problem instead of throwing', () => {
+    const problems = authorEmailRule.validate({
+      commit,
+      git: { authorEmail: 'user@company.com', signed: false },
+      options: { pattern: '(' },
+    });
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /Invalid author-email pattern/);
+  });
+
   describe('validateOptions', () => {
     it('returns empty for valid pattern', () => {
       assert.equal(authorEmailRule.validateOptions!({ pattern: '^.+@company\\.com$' }).length, 0);

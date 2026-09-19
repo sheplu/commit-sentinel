@@ -145,7 +145,7 @@ function buildRegistry(plugins: readonly Rule[]): ReadonlyMap<string, Rule> {
   for (const plugin of plugins) {
     if (!isRule(plugin)) {
       throw new Error(
-        'Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function).',
+        'Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function; validateOptions, when present, must also be a function).',
       );
     }
     const name = plugin.meta.name;
@@ -161,8 +161,15 @@ function buildRegistry(plugins: readonly Rule[]): ReadonlyMap<string, Rule> {
 }
 
 function isRule(value: unknown): value is Rule {
-  const candidate = value as { meta?: { name?: unknown }; validate?: unknown } | null;
-  return typeof candidate?.meta?.name === 'string' && typeof candidate.validate === 'function';
+  const candidate = value as {
+    meta?: { name?: unknown };
+    validate?: unknown;
+    validateOptions?: unknown;
+  } | null;
+  if (typeof candidate?.meta?.name !== 'string' || typeof candidate.validate !== 'function') {
+    return false;
+  }
+  return candidate.validateOptions === undefined || typeof candidate.validateOptions === 'function';
 }
 
 function normalizeRuleConfig(config: RuleConfig): ResolvedRuleEntry | null {

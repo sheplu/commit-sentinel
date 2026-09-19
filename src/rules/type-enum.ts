@@ -21,6 +21,9 @@ export const typeEnumRule = defineRule<TypeEnumOptions>({
     if (invalid.length > 0) {
       return [{ message: `"allowed" must contain only strings, got: ${invalid.map((v) => typeof v).join(', ')}.` }];
     }
+    if (options.allowed.length === 0) {
+      return [{ message: '"allowed" must not be empty — to disable the rule, set it to \'off\' instead.' }];
+    }
     return [];
   },
   validate({ commit, options }) {

@@ -50,5 +50,11 @@ describe('scope-enum rule', () => {
       assert.equal(problems.length, 1);
       assert.match(problems[0]!.message, /must contain only strings/);
     });
+
+    it('reports empty allowed list', () => {
+      const problems = scopeEnumRule.validateOptions!({ allowed: [] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"allowed" must not be empty/);
+    });
   });
 });

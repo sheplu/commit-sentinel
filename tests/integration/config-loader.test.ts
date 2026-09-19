@@ -313,6 +313,7 @@ describe('loadConfig', () => {
         '{}',
         "{ meta: { name: 42 }, validate() { return []; } }",
         "{ meta: { name: 'no-validate' } }",
+        "{ meta: { name: 'bad-validate-options' }, validate() { return []; }, validateOptions: 'typo' }",
       ];
 
       for (const [index, plugin] of invalidPlugins.entries()) {
@@ -383,6 +384,46 @@ describe('loadConfig', () => {
       await assert.rejects(
         () => loadConfig(dir),
         /Invalid options for rule "type-enum"/,
+      );
+    });
+
+    it('throws for empty type-enum allowed list', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'type-enum': ['error', { allowed: [] }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        (err: Error) => {
+          assert.match(err.message, /Invalid options for rule "type-enum"/);
+          assert.match(err.message, /"allowed" must not be empty/);
+          return true;
+        },
+      );
+    });
+
+    it('throws for empty scope-enum allowed list', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'scope-enum': ['error', { allowed: [] }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        (err: Error) => {
+          assert.match(err.message, /Invalid options for rule "scope-enum"/);
+          assert.match(err.message, /"allowed" must not be empty/);
+          return true;
+        },
       );
     });
 
