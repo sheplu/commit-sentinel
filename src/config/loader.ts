@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { ActiveSeverity, Rule, RuleConfig } from '../rules/types.ts';
+import type { ActiveSeverity, Rule, RuleConfig, Severity } from '../rules/types.ts';
 import type { UserConfig } from './define-config.ts';
 import { builtinRules } from '../rules/registry.ts';
 import { getPreset, strict } from './presets.ts';
@@ -42,7 +42,8 @@ const CONFIG_FILE = 'commit-sentinel.config.ts';
  * @returns A fully resolved config with only active rules.
  * @throws When an explicit `configPath` does not exist, the config file fails
  * to import, a plugin rule is malformed or its name collides with a built-in
- * rule or another plugin, or a `rules` entry references an unknown rule.
+ * rule or another plugin, a `rules` entry references an unknown rule, or a
+ * rule entry has an unknown severity or malformed configuration shape.
  */
 export async function loadConfig(cwd?: string, configPath?: string): Promise<ResolvedConfig> {
   const dir = cwd ?? process.cwd();
@@ -111,7 +112,7 @@ function resolveConfig(
   // Normalize to ResolvedRuleEntry, filtering out 'off' rules
   const rules: Record<string, ResolvedRuleEntry> = {};
   for (const [name, config] of Object.entries(merged)) {
-    const entry = normalizeRuleConfig(config);
+    const entry = normalizeRuleConfig(name, config);
     if (entry !== null) {
       rules[name] = entry;
     }
@@ -172,10 +173,33 @@ function isRule(value: unknown): value is Rule {
   return candidate.validateOptions === undefined || typeof candidate.validateOptions === 'function';
 }
 
-function normalizeRuleConfig(config: RuleConfig): ResolvedRuleEntry | null {
+function normalizeRuleConfig(name: string, config: RuleConfig): ResolvedRuleEntry | null {
   if (config === 'off') return null;
-  if (config === 'warn') return { severity: 'warn', options: {} };
-  if (config === 'error') return { severity: 'error', options: {} };
-  // Tuple form: [severity, options]
-  return { severity: config[0], options: config[1] ?? {} };
+  if (config === 'warn' || config === 'error') return { severity: config, options: {} };
+
+  if (typeof config === 'string') {
+    throw new Error(
+      `Unknown severity "${config}" for rule "${name}". Use 'off', 'warn', or 'error'.`,
+    );
+  }
+  if (!Array.isArray(config)) {
+    throw new Error(
+      `Invalid configuration for rule "${name}": expected 'off', 'warn', 'error', or a [severity, options] tuple.`,
+    );
+  }
+
+  const severity = config[0] as Severity;
+  if (severity === 'off') return null;
+  if (severity !== 'warn' && severity !== 'error') {
+    throw new Error(
+      `Unknown severity ${JSON.stringify(severity)} for rule "${name}". Use 'off', 'warn', or 'error'.`,
+    );
+  }
+
+  if (config[1] !== undefined && (typeof config[1] !== 'object' || config[1] === null)) {
+    throw new Error(
+      `Invalid options for rule "${name}": expected an object, got: ${typeof config[1]}.`,
+    );
+  }
+  return { severity, options: config[1] ?? {} };
 }

@@ -561,4 +561,116 @@ describe('loadConfig', () => {
       assert.ok(config.rules['custom-validated']);
     });
   });
+
+  describe('severity and shape validation', () => {
+    it('throws for a typo\'d severity in tuple form', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['oops', { max: 100 }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Unknown severity "oops" for rule "header-max-length"/,
+      );
+    });
+
+    it('throws for a typo\'d bare string severity', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': 'Warning',
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Unknown severity "Warning" for rule/,
+      );
+    });
+
+    it('throws for a non-string severity in tuple form', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': [42, {}],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Unknown severity 42 for rule/,
+      );
+    });
+
+    it('throws for a non-string, non-tuple rule config', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': 42,
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid configuration for rule/,
+      );
+    });
+
+    it('throws for non-object options in tuple form', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['warn', 'oops'],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule.*expected an object/,
+      );
+    });
+
+    it('throws for explicit null options in tuple form', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['warn', null],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule/,
+      );
+    });
+
+    it('disables the rule for an off tuple with options', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['off', { max: 50 }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      const config = await loadConfig(dir);
+      assert.equal(config.rules['header-max-length'], undefined);
+    });
+  });
 });
