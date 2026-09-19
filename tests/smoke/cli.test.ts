@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { run } from '../../src/cli.ts';
+import { attribution } from '../fixtures/messages.ts';
 
 describe('CLI run()', () => {
   let dir: string;
@@ -155,8 +156,7 @@ describe('CLI run()', () => {
       const configPath = join(dir, 'agent.config.ts');
       await writeFile(configPath, `export default { extends: 'strict', rules: { 'agent-attribution': 'error' } };`);
 
-      const message = 'feat: add login\n\nBody text.\n\nCo-Authored-By: Claude <noreply@anthropic.com>';
-      const result = await run(['--message', message, '--config', configPath]);
+      const result = await run(['--message', attribution.claudeFooter, '--config', configPath]);
       assert.equal(result.exitCode, 2);
       assert.match(result.stderr, /agent-attribution/);
     });
@@ -165,9 +165,18 @@ describe('CLI run()', () => {
       const configPath = join(dir, 'agent-allow.config.ts');
       await writeFile(configPath, `export default { extends: 'strict', rules: { 'agent-attribution': ['error', { allow: ['claude'] }] } };`);
 
-      const message = 'feat: add login\n\nBody text.\n\nCo-Authored-By: Claude <noreply@anthropic.com>';
-      const result = await run(['--message', message, '--config', configPath]);
+      const result = await run(['--message', attribution.claudeFooter, '--config', configPath]);
       assert.equal(result.exitCode, 0);
+    });
+
+    it('warns but exits 0 at warn severity', async () => {
+      const configPath = join(dir, 'agent-warn.config.ts');
+      await writeFile(configPath, `export default { extends: 'strict', rules: { 'agent-attribution': 'warn' } };`);
+
+      const result = await run(['--message', attribution.claudeFooter, '--config', configPath]);
+      assert.equal(result.exitCode, 0);
+      assert.match(result.stdout, /agent-attribution/);
+      assert.match(result.stdout, /warning\(s\)/);
     });
   });
 
