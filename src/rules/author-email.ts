@@ -12,14 +12,20 @@ export const authorEmailRule = defineRule<AuthorEmailOptions>({
     requiresGit: true,
     defaultSeverity: 'error',
   },
-  validate({ git, options }) {
-    if (git === null) return [];
+  validateOptions(options) {
+    if (options.pattern !== undefined && typeof options.pattern !== 'string') {
+      return [
+        {
+          message: `Invalid author-email pattern: "${String(options.pattern)}". "pattern" must be a string.`,
+          suggestion: 'Check the regex syntax in your config.',
+        },
+      ];
+    }
     const pattern = options.pattern ?? '.+';
-
-    let re: RegExp;
     try {
       // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-      re = new RegExp(pattern);
+      new RegExp(pattern);
+      return [];
     } catch {
       return [
         {
@@ -28,7 +34,12 @@ export const authorEmailRule = defineRule<AuthorEmailOptions>({
         },
       ];
     }
-
+  },
+  validate({ git, options }) {
+    if (git === null) return [];
+    const pattern = options.pattern ?? '.+';
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+    const re = new RegExp(pattern);
     if (re.test(git.authorEmail)) return [];
     return [
       {

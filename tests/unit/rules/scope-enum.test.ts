@@ -29,4 +29,26 @@ describe('scope-enum rule', () => {
   it('passes with empty allowed list', () => {
     assert.equal(run('feat(anything): goes', []).length, 0);
   });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid options', () => {
+      assert.equal(scopeEnumRule.validateOptions!({ allowed: ['api', 'ui'] }).length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(scopeEnumRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports non-array allowed', () => {
+      const problems = scopeEnumRule.validateOptions!({ allowed: 'api' as unknown as string[] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /must be an array of strings/);
+    });
+
+    it('reports non-string entries in allowed', () => {
+      const problems = scopeEnumRule.validateOptions!({ allowed: [123 as unknown as string] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /must contain only strings/);
+    });
+  });
 });

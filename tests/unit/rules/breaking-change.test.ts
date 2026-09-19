@@ -42,4 +42,21 @@ describe('breaking-change rule', () => {
     const msg = 'feat: change\n\nBREAKING CHANGE: new behavior';
     assert.equal(run(msg).length, 0);
   });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid options', () => {
+      assert.equal(breakingChangeRule.validateOptions!({ requireFooter: true }).length, 0);
+      assert.equal(breakingChangeRule.validateOptions!({ requireFooter: false }).length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(breakingChangeRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports non-boolean requireFooter', () => {
+      const problems = breakingChangeRule.validateOptions!({ requireFooter: 'yes' as unknown as boolean });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /must be a boolean/);
+    });
+  });
 });

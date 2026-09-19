@@ -12,6 +12,13 @@ export const subjectMinLengthRule = defineRule<SubjectMinLengthOptions>({
     requiresGit: false,
     defaultSeverity: 'error',
   },
+  validateOptions(options) {
+    if (options.min === undefined) return [];
+    if (typeof options.min !== 'number' || !Number.isInteger(options.min) || options.min < 0) {
+      return [{ message: `"min" must be a non-negative integer, got: ${JSON.stringify(options.min)}.` }];
+    }
+    return [];
+  },
   validate({ commit, options }) {
     if (commit.subject === null) return [];
     const min = options.min ?? 1;

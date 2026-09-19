@@ -12,6 +12,17 @@ export const typeEnumRule = defineRule<TypeEnumOptions>({
     requiresGit: false,
     defaultSeverity: 'error',
   },
+  validateOptions(options) {
+    if (options.allowed === undefined) return [];
+    if (!Array.isArray(options.allowed)) {
+      return [{ message: '"allowed" must be an array of strings.' }];
+    }
+    const invalid = options.allowed.filter((v) => typeof v !== 'string');
+    if (invalid.length > 0) {
+      return [{ message: `"allowed" must contain only strings, got: ${invalid.map((v) => typeof v).join(', ')}.` }];
+    }
+    return [];
+  },
   validate({ commit, options }) {
     if (commit.type === null) return [];
     const allowed = options.allowed ?? [];

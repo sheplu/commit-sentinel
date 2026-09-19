@@ -12,6 +12,13 @@ export const headerMaxLengthRule = defineRule<HeaderMaxLengthOptions>({
     requiresGit: false,
     defaultSeverity: 'warn',
   },
+  validateOptions(options) {
+    if (options.max === undefined) return [];
+    if (typeof options.max !== 'number' || !Number.isInteger(options.max) || options.max < 1) {
+      return [{ message: `"max" must be a positive integer, got: ${JSON.stringify(options.max)}.` }];
+    }
+    return [];
+  },
   validate({ commit, options }) {
     const max = options.max ?? 100;
     if (commit.header.length <= max) return [];
