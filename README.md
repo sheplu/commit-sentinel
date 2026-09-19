@@ -104,6 +104,8 @@ export default defineConfig({
 
 A plugin rule is **enabled automatically** at its `meta.defaultSeverity`; an entry under `rules` (keyed by the rule's `meta.name`) overrides its severity/options or turns it `'off'`. Name collisions and unknown rule names fail at config load (exit code 1).
 
+A rule may also define `validateOptions()` to reject bad rule options at config load (exit code 1). Plugin rules are auto-enabled with empty options `{}`, so `validateOptions` must treat an all-fields-absent object as valid — a rule whose `validateOptions` rejects `{}` cannot be loaded at all. See [PLUGINS.md](./PLUGINS.md) for details.
+
 **Full guide — API reference, typed options, git-metadata rules, recipes, testing, distribution: [PLUGINS.md](./PLUGINS.md)**
 
 ## Presets

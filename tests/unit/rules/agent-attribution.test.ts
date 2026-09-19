@@ -367,6 +367,12 @@ describe('agent-attribution', () => {
       assert.equal(problems.length, 1);
       assert.match(problems[0]!.message, /custom agent-attribution pattern/);
     });
+
+    it('reports an invalid regex as a problem instead of throwing', () => {
+      const problems = run('feat: add login', { patterns: ['('] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Invalid agent-attribution pattern/);
+    });
   });
 
   describe('known agents taxonomy', () => {
@@ -455,6 +461,44 @@ describe('agent-attribution', () => {
         patterns: ['built-with:\\s*some-tool'],
       });
       assert.equal(problems.length, 0);
+    });
+
+    it('reports non-array allow without iterating it', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: 1 as unknown as string[] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"allow" must be an array of agent ID strings/);
+    });
+
+    it('reports a bare-string allow instead of iterating it character-by-character', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: 'claude' as unknown as string[] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"allow" must be an array of agent ID strings/);
+    });
+
+    it('reports non-string entries in allow', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: [42 as unknown as string] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"allow" must be an array of agent ID strings/);
+    });
+
+    it('reports non-array patterns without iterating it', () => {
+      const problems = agentAttributionRule.validateOptions!({ patterns: 1 as unknown as string[] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"patterns" must be an array of regex strings/);
+    });
+
+    it('reports non-string entries in patterns', () => {
+      const problems = agentAttributionRule.validateOptions!({ patterns: [42 as unknown as string] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /"patterns" must be an array of regex strings/);
+    });
+
+    it('reports malformed allow and patterns together', () => {
+      const problems = agentAttributionRule.validateOptions!({
+        allow: 1 as unknown as string[],
+        patterns: 2 as unknown as string[],
+      });
+      assert.equal(problems.length, 2);
     });
   });
 });

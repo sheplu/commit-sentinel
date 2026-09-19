@@ -79,9 +79,21 @@ export interface Rule<Options = unknown> {
    * array when the options are valid; any returned problems cause a hard
    * config error regardless of the rule's severity.
    *
+   * Plugin rules are auto-enabled with `{}` options, so this must treat an
+   * all-fields-absent object as valid.
+   *
    * Optional — rules without it skip early validation.
    */
   validateOptions?(options: Options): RuleProblem[];
-  /** Validate a commit and return any problems found. */
+  /**
+   * Validate a commit and return any problems found.
+   *
+   * When a rule defines {@link Rule.validateOptions}, the config loader runs
+   * it at load time and this method may assume those checks passed — e.g.
+   * that option-typed regexes compile. Configs built by hand (bypassing
+   * `loadConfig`) skip that step, so rules that compile user-supplied
+   * patterns should still catch construction failures and report them as
+   * problems rather than throwing.
+   */
   validate(context: RuleContext<Options>): RuleProblem[];
 }
