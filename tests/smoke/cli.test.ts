@@ -180,6 +180,90 @@ describe('CLI run()', () => {
     });
   });
 
+  describe('config option validation', () => {
+    it('exits 1 when config has invalid rule options', async () => {
+      const configPath = join(dir, 'bad-options.config.ts');
+      await writeFile(configPath, `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['error', { max: -1 }],
+          },
+        };
+      `);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, /Invalid options for rule "header-max-length"/);
+      assert.equal(result.stdout, '');
+    });
+
+    it('exits 1 when config has invalid subject-case option', async () => {
+      const configPath = join(dir, 'bad-case.config.ts');
+      await writeFile(configPath, `
+        export default {
+          extends: 'strict',
+          rules: {
+            'subject-case': ['warn', { case: 'lowr' }],
+          },
+        };
+      `);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, /Invalid options for rule "subject-case"/);
+    });
+
+    it('exits 1 when plugin validateOptions rejects options', async () => {
+      const configPath = join(dir, 'plugin-validate.config.ts');
+      await writeFile(configPath, `
+        export default {
+          extends: 'strict',
+          plugins: [{
+            meta: {
+              name: 'strict-plugin',
+              description: 'plugin with option validation',
+              category: 'content',
+              requiresGit: false,
+              defaultSeverity: 'warn',
+            },
+            validateOptions(options) {
+              if (options.mode !== 'strict') {
+                return [{ message: '"mode" must be "strict".' }];
+              }
+              return [];
+            },
+            validate() { return []; },
+          }],
+          rules: {
+            'strict-plugin': ['warn', { mode: 'relaxed' }],
+          },
+        };
+      `);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 1);
+      assert.match(result.stderr, /Invalid options for rule "strict-plugin"/);
+    });
+
+    it('config validation error uses exit 1 not exit 2', async () => {
+      // Exit 1 = user/config error, Exit 2 = lint failure
+      const configPath = join(dir, 'bad-enum.config.ts');
+      await writeFile(configPath, `
+        export default {
+          extends: 'strict',
+          rules: {
+            'type-enum': ['error', { allowed: 'feat' }],
+          },
+        };
+      `);
+
+      const result = await run(['--message', 'feat: add login', '--config', configPath]);
+      assert.equal(result.exitCode, 1);
+      assert.notEqual(result.exitCode, 2);
+    });
+  });
+
   describe('custom rules via plugins', () => {
     const pluginConfig = `
       export default {

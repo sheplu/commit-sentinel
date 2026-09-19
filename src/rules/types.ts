@@ -72,6 +72,16 @@ export interface RuleContext<Options = unknown> {
 export interface Rule<Options = unknown> {
   /** Static metadata about the rule. */
   meta: RuleMeta;
+  /**
+   * Validate rule options at config-load time.
+   *
+   * Called by the config loader for every enabled rule. Return an empty
+   * array when the options are valid; any returned problems cause a hard
+   * config error regardless of the rule's severity.
+   *
+   * Optional — rules without it skip early validation.
+   */
+  validateOptions?(options: Options): RuleProblem[];
   /** Validate a commit and return any problems found. */
   validate(context: RuleContext<Options>): RuleProblem[];
 }

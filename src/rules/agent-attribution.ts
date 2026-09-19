@@ -89,10 +89,10 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
     requiresGit: false,
     defaultSeverity: 'error',
   },
-  validate({ commit, options }) {
+  validateOptions(options) {
     const problems: { message: string; suggestion?: string }[] = [];
-    const allowSet = new Set(options.allow ?? []);
 
+    const allowSet = new Set(options.allow ?? []);
     const unknownIds = [...allowSet].filter((id) => !KNOWN_AGENTS.has(id));
     if (unknownIds.length > 0) {
       const label = unknownIds.length === 1 ? 'Unknown agent ID' : 'Unknown agent IDs';
@@ -101,8 +101,25 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
         message: `${label} ${quoted} in allow list. Known agents: ${[...KNOWN_AGENTS.keys()].join(', ')}.`,
         suggestion: 'Check the agent-attribution allow option in your config.',
       });
-      return problems;
     }
+
+    for (const patternStr of options.patterns ?? []) {
+      try {
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+        new RegExp(patternStr, 'im');
+      } catch {
+        problems.push({
+          message: `Invalid agent-attribution pattern: "${patternStr}".`,
+          suggestion: 'Check the regex syntax in your config.',
+        });
+      }
+    }
+
+    return problems;
+  },
+  validate({ commit, options }) {
+    const problems: { message: string; suggestion?: string }[] = [];
+    const allowSet = new Set(options.allow ?? []);
 
     for (const [id, agent] of KNOWN_AGENTS) {
       if (allowSet.has(id)) continue;
@@ -118,18 +135,8 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
     }
 
     for (const patternStr of options.patterns ?? []) {
-      let re: RegExp;
-      try {
-        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-        re = new RegExp(patternStr, 'im');
-      } catch {
-        problems.push({
-          message: `Invalid agent-attribution pattern: "${patternStr}".`,
-          suggestion: 'Check the regex syntax in your config.',
-        });
-        continue;
-      }
-
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+      const re = new RegExp(patternStr, 'im');
       if (re.test(commit.raw)) {
         problems.push({
           message: `Commit matches custom agent-attribution pattern /${patternStr}/.`,

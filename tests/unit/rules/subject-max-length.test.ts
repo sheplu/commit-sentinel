@@ -31,4 +31,37 @@ describe('subject-max-length rule', () => {
   it('skips when subject is null', () => {
     assert.equal(run('bad message', 72).length, 0);
   });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid options', () => {
+      assert.equal(subjectMaxLengthRule.validateOptions!({ max: 72 }).length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(subjectMaxLengthRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports non-integer max', () => {
+      const problems = subjectMaxLengthRule.validateOptions!({ max: 3.5 });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /positive integer/);
+    });
+
+    it('reports negative max', () => {
+      const problems = subjectMaxLengthRule.validateOptions!({ max: -1 });
+      assert.equal(problems.length, 1);
+    });
+
+    it('reports zero max', () => {
+      const problems = subjectMaxLengthRule.validateOptions!({ max: 0 });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /positive integer/);
+    });
+
+    it('reports string max', () => {
+      const problems = subjectMaxLengthRule.validateOptions!({ max: 'ten' as unknown as number });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /positive integer/);
+    });
+  });
 });

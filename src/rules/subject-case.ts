@@ -6,6 +6,8 @@ interface SubjectCaseOptions {
   case?: CaseOption;
 }
 
+const VALID_CASES: readonly string[] = ['lower', 'sentence', 'upper'];
+
 export const subjectCaseRule = defineRule<SubjectCaseOptions>({
   meta: {
     name: 'subject-case',
@@ -13,6 +15,15 @@ export const subjectCaseRule = defineRule<SubjectCaseOptions>({
     category: 'content',
     requiresGit: false,
     defaultSeverity: 'warn',
+  },
+  validateOptions(options) {
+    if (options.case === undefined) return [];
+    if (!VALID_CASES.includes(options.case as string)) {
+      return [
+        { message: `Invalid case option "${options.case}". Must be one of: ${VALID_CASES.join(', ')}.` },
+      ];
+    }
+    return [];
   },
   validate({ commit, options }) {
     if (commit.subject === null || commit.subject.length === 0) return [];

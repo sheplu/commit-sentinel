@@ -12,6 +12,13 @@ export const breakingChangeRule = defineRule<BreakingChangeOptions>({
     requiresGit: false,
     defaultSeverity: 'warn',
   },
+  validateOptions(options) {
+    if (options.requireFooter === undefined) return [];
+    if (typeof options.requireFooter !== 'boolean') {
+      return [{ message: `"requireFooter" must be a boolean, got: ${JSON.stringify(options.requireFooter)}.` }];
+    }
+    return [];
+  },
   validate({ commit, options }) {
     const problems: { message: string; suggestion?: string }[] = [];
     const requireFooter = options.requireFooter ?? false;

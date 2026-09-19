@@ -117,7 +117,25 @@ function resolveConfig(
     }
   }
 
+  validateAllRuleOptions(rules, ruleRegistry);
+
   return { rules, ruleRegistry };
+}
+
+function validateAllRuleOptions(
+  rules: Record<string, ResolvedRuleEntry>,
+  registry: ReadonlyMap<string, Rule>,
+): void {
+  for (const [name, entry] of Object.entries(rules)) {
+    const rule = registry.get(name);
+    if (!rule?.validateOptions) continue;
+
+    const problems = rule.validateOptions(entry.options);
+    if (problems.length === 0) continue;
+
+    const details = problems.map((p) => p.message).join(' ');
+    throw new Error(`Invalid options for rule "${name}": ${details}`);
+  }
 }
 
 function buildRegistry(plugins: readonly Rule[]): ReadonlyMap<string, Rule> {

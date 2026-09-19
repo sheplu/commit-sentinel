@@ -68,4 +68,28 @@ describe('subject-case rule', () => {
     });
     assert.equal(problems.length, 1);
   });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid case option', () => {
+      assert.equal(subjectCaseRule.validateOptions!({ case: 'lower' }).length, 0);
+      assert.equal(subjectCaseRule.validateOptions!({ case: 'sentence' }).length, 0);
+      assert.equal(subjectCaseRule.validateOptions!({ case: 'upper' }).length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(subjectCaseRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports invalid case value', () => {
+      const problems = subjectCaseRule.validateOptions!({ case: 'lowr' as 'lower' });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Must be one of: lower, sentence, upper/);
+    });
+
+    it('reports non-string case value', () => {
+      const problems = subjectCaseRule.validateOptions!({ case: 42 as unknown as 'lower' });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Must be one of/);
+    });
+  });
 });

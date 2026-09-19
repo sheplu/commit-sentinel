@@ -7,6 +7,7 @@ import type { ActiveSeverity } from '../../src/rules/types.ts';
 import { humanFormatter } from '../../src/formatters/human.ts';
 import { jsonFormatter } from '../../src/formatters/json.ts';
 import { sarifFormatter } from '../../src/formatters/sarif.ts';
+import { builtinRules } from '../../src/rules/registry.ts';
 
 // ── shared configs ──
 
@@ -172,6 +173,54 @@ describe('validate fuzz', () => {
       }),
       { numRuns: 100 },
     );
+  });
+});
+
+describe('validateOptions fuzz', () => {
+  const rulesWithValidateOptions = [...builtinRules.entries()].filter(
+    ([, rule]) => typeof rule.validateOptions === 'function',
+  );
+
+  it('validateOptions never throws for arbitrary option objects', () => {
+    const optionsArb = fc.oneof(
+      fc.dictionary(fc.string(), fc.anything()),
+      fc.constant({}),
+      fc.constant({ max: undefined }),
+    );
+
+    for (const [name, rule] of rulesWithValidateOptions) {
+      fc.assert(
+        fc.property(optionsArb, (options: Record<string, unknown>) => {
+          const problems = rule.validateOptions!(options);
+          assert.ok(Array.isArray(problems), `${name}.validateOptions must return an array`);
+        }),
+        { numRuns: 200 },
+      );
+    }
+  });
+
+  it('validateOptions returns well-formed problems', () => {
+    const optionsArb = fc.dictionary(fc.string(), fc.anything());
+
+    for (const [name, rule] of rulesWithValidateOptions) {
+      fc.assert(
+        fc.property(optionsArb, (options: Record<string, unknown>) => {
+          const problems = rule.validateOptions!(options);
+          for (const problem of problems) {
+            assert.equal(typeof problem.message, 'string', `${name}: problem.message must be a string`);
+            assert.ok(problem.message.length > 0, `${name}: problem.message must be non-empty`);
+          }
+        }),
+        { numRuns: 200 },
+      );
+    }
+  });
+
+  it('validateOptions accepts default/empty options for all rules', () => {
+    for (const [name, rule] of rulesWithValidateOptions) {
+      const problems = rule.validateOptions!({});
+      assert.equal(problems.length, 0, `${name}.validateOptions({}) should accept defaults`);
+    }
   });
 });
 

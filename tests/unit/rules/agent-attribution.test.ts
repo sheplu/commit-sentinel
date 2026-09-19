@@ -345,32 +345,6 @@ describe('agent-attribution', () => {
       assert.equal(problems.length, 2);
     });
 
-    it('fails loud on unknown agent ID', () => {
-      const problems = run('feat: add login', { allow: ['unknown-agent'] });
-      assert.equal(problems.length, 1);
-      assert.match(problems[0]!.message, /Unknown agent ID "unknown-agent"/);
-    });
-
-    it('fails loud on unknown agent ID before checking markers', () => {
-      const problems = run(attribution.claudeFooter, { allow: ['bad-id'] });
-      assert.equal(problems.length, 1);
-      assert.match(problems[0]!.message, /Unknown agent ID/);
-    });
-
-    it('lists known agent IDs in the error message', () => {
-      const problems = run('feat: add login', { allow: ['nope'] });
-      assert.match(problems[0]!.message, /claude/);
-      assert.match(problems[0]!.message, /copilot/);
-      assert.match(problems[0]!.message, /vibe/);
-    });
-
-    it('reports all unknown agent IDs at once', () => {
-      const problems = run('feat: add login', { allow: ['bad1', 'bad2'] });
-      assert.equal(problems.length, 1);
-      assert.match(problems[0]!.message, /Unknown agent IDs/);
-      assert.match(problems[0]!.message, /"bad1"/);
-      assert.match(problems[0]!.message, /"bad2"/);
-    });
   });
 
   describe('patterns option', () => {
@@ -386,11 +360,6 @@ describe('agent-attribution', () => {
       assert.equal(problems.length, 0);
     });
 
-    it('reports invalid regex gracefully', () => {
-      const problems = run('feat: add login', { patterns: ['[invalid'] });
-      assert.equal(problems.length, 1);
-      assert.match(problems[0]!.message, /Invalid agent-attribution pattern/);
-    });
 
     it('custom patterns still fire when known agents are allowed', () => {
       const msg = 'feat: add login\n\nMade-with: internal-ai-tool';
@@ -434,5 +403,58 @@ describe('agent-attribution', () => {
     const problems = run(msg);
     const claudeProblems = problems.filter((p) => p.message.includes('Claude Code'));
     assert.equal(claudeProblems.length, 1);
+  });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid options', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: ['claude', 'copilot'] });
+      assert.equal(problems.length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(agentAttributionRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports unknown agent ID', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: ['unknown-agent'] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Unknown agent ID "unknown-agent"/);
+    });
+
+    it('reports multiple unknown agent IDs', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: ['bad1', 'bad2'] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Unknown agent IDs/);
+      assert.match(problems[0]!.message, /"bad1"/);
+      assert.match(problems[0]!.message, /"bad2"/);
+    });
+
+    it('lists known agent IDs in the error message', () => {
+      const problems = agentAttributionRule.validateOptions!({ allow: ['nope'] });
+      assert.match(problems[0]!.message, /claude/);
+      assert.match(problems[0]!.message, /copilot/);
+      assert.match(problems[0]!.message, /vibe/);
+    });
+
+    it('reports invalid regex pattern', () => {
+      const problems = agentAttributionRule.validateOptions!({ patterns: ['[invalid'] });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Invalid agent-attribution pattern/);
+    });
+
+    it('reports both unknown IDs and invalid patterns', () => {
+      const problems = agentAttributionRule.validateOptions!({
+        allow: ['nope'],
+        patterns: ['[bad'],
+      });
+      assert.equal(problems.length, 2);
+    });
+
+    it('accepts valid patterns', () => {
+      const problems = agentAttributionRule.validateOptions!({
+        patterns: ['built-with:\\s*some-tool'],
+      });
+      assert.equal(problems.length, 0);
+    });
   });
 });

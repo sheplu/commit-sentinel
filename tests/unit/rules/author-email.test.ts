@@ -33,4 +33,26 @@ describe('author-email rule', () => {
     assert.equal(problems.length, 1);
     assert.match(problems[0]!.message, /does not match pattern/);
   });
+
+  describe('validateOptions', () => {
+    it('returns empty for valid pattern', () => {
+      assert.equal(authorEmailRule.validateOptions!({ pattern: '^.+@company\\.com$' }).length, 0);
+    });
+
+    it('returns empty for default options', () => {
+      assert.equal(authorEmailRule.validateOptions!({}).length, 0);
+    });
+
+    it('reports invalid regex', () => {
+      const problems = authorEmailRule.validateOptions!({ pattern: '[invalid' });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Invalid author-email pattern/);
+    });
+
+    it('reports non-string pattern', () => {
+      const problems = authorEmailRule.validateOptions!({ pattern: 42 as unknown as string });
+      assert.equal(problems.length, 1);
+      assert.match(problems[0]!.message, /Invalid author-email pattern/);
+    });
+  });
 });

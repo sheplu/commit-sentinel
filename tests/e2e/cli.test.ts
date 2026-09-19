@@ -247,6 +247,75 @@ describe('CLI e2e', () => {
     assert.match(result.stderr, /Unknown rule "no-such-rule"/);
   });
 
+  // ── config option validation ──
+
+  it('exits 1 for invalid rule options in config', async () => {
+    const configPath = join(dir, 'bad-options.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'header-max-length': ['error', { max: 'big' }],
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Invalid options for rule "header-max-length"/);
+  });
+
+  it('exits 1 for invalid subject-case option in config', async () => {
+    const configPath = join(dir, 'bad-case.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'subject-case': ['warn', { case: 'camelCase' }],
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Invalid options for rule "subject-case"/);
+  });
+
+  it('exits 1 for invalid agent-attribution allow option in config', async () => {
+    const configPath = join(dir, 'bad-agent.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'agent-attribution': ['error', { allow: ['cluade'] }],
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Invalid options for rule "agent-attribution"/);
+    assert.match(result.stderr, /Unknown agent ID/);
+  });
+
+  it('config validation error outputs plain text even with --json', async () => {
+    const configPath = join(dir, 'bad-json.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'header-max-length': ['error', { max: -1 }],
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath, '--json']);
+    assert.equal(result.exitCode, 1);
+    // Config errors bypass the formatter — stderr is plain text, not JSON
+    assert.match(result.stderr, /Invalid options for rule/);
+    assert.throws(() => JSON.parse(result.stderr), 'stderr should not be valid JSON');
+  });
+
   // ── negative / error paths ──
 
   it('exits 2 for invalid format (no colon)', async () => {

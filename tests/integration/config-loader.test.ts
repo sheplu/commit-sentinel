@@ -336,4 +336,188 @@ describe('loadConfig', () => {
       assert.equal(config.ruleRegistry.has('no-wip'), false);
     });
   });
+
+  describe('rule option validation', () => {
+    it('throws for invalid rule options at load time', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['warn', { max: -5 }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule "header-max-length"/,
+      );
+    });
+
+    it('throws for invalid subject-case option', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'subject-case': ['warn', { case: 'lowr' }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule "subject-case"/,
+      );
+    });
+
+    it('throws for non-array type-enum allowed', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'type-enum': ['error', { allowed: 'feat' }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule "type-enum"/,
+      );
+    });
+
+    it('accepts valid rule options without error', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['warn', { max: 72 }],
+            'subject-case': ['warn', { case: 'lower' }],
+            'type-enum': ['error', { allowed: ['feat', 'fix'] }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      const config = await loadConfig(dir);
+      assert.ok(config.rules['header-max-length']);
+      assert.ok(config.rules['subject-case']);
+      assert.ok(config.rules['type-enum']);
+    });
+
+    it('does not validate options for disabled rules', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': 'off',
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      const config = await loadConfig(dir);
+      assert.equal(config.rules['header-max-length'], undefined);
+    });
+
+    it('validates plugin rule options via validateOptions', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          plugins: [{
+            meta: {
+              name: 'custom-validated',
+              description: 'A plugin with option validation',
+              category: 'content',
+              requiresGit: false,
+              defaultSeverity: 'warn',
+            },
+            validateOptions(options) {
+              if (options.foo !== 'bar') {
+                return [{ message: '"foo" must be "bar".' }];
+              }
+              return [];
+            },
+            validate() { return []; },
+          }],
+          rules: {
+            'custom-validated': ['warn', { foo: 'baz' }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule "custom-validated"/,
+      );
+    });
+
+    it('throws on the first invalid rule (fail-fast)', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'header-max-length': ['warn', { max: -5 }],
+            'subject-case': ['warn', { case: 'lowr' }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule/,
+      );
+    });
+
+    it('all built-in presets pass option validation', async () => {
+      for (const preset of ['strict', 'conventional', 'angular', 'hardened']) {
+        const configContent = `export default { extends: '${preset}' };`;
+        await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+        const config = await loadConfig(dir);
+        assert.ok(config.rules, `preset "${preset}" should resolve without error`);
+      }
+    });
+
+    it('includes the rule name in the error message', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'body-max-line-length': ['warn', { max: 'banana' }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        (err: Error) => {
+          assert.match(err.message, /Invalid options for rule "body-max-line-length"/);
+          assert.match(err.message, /positive integer/);
+          return true;
+        },
+      );
+    });
+
+    it('passes when plugin validateOptions returns empty', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          plugins: [{
+            meta: {
+              name: 'custom-validated',
+              description: 'A plugin with option validation',
+              category: 'content',
+              requiresGit: false,
+              defaultSeverity: 'warn',
+            },
+            validateOptions(options) {
+              return [];
+            },
+            validate() { return []; },
+          }],
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      const config = await loadConfig(dir);
+      assert.ok(config.rules['custom-validated']);
+    });
+  });
 });
