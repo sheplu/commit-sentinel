@@ -298,6 +298,22 @@ describe('CLI e2e', () => {
     assert.match(result.stderr, /Unknown agent ID/);
   });
 
+  it('exits 1 for a typo\'d severity in config', async () => {
+    const configPath = join(dir, 'bad-severity.config.ts');
+    await writeFile(configPath, `
+      export default {
+        extends: 'strict',
+        rules: {
+          'header-max-length': ['oops', { max: 100 }],
+        },
+      };
+    `);
+
+    const result = await runCli(['--message', 'feat: add login', '--config', configPath]);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Unknown severity "oops" for rule/);
+  });
+
   it('config validation error outputs plain text even with --json', async () => {
     const configPath = join(dir, 'bad-json.config.ts');
     await writeFile(configPath, `
