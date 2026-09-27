@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { run } from '../../src/cli.ts';
+import { VERSION } from '../../src/version.ts';
 import { attribution } from '../fixtures/messages.ts';
+import { gitEnv } from '../helpers/git-env.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,7 +32,7 @@ describe('CLI run()', () => {
   it('prints version and exits 0', async () => {
     const result = await run(['--version']);
     assert.equal(result.exitCode, 0);
-    assert.match(result.stdout, /0\.1\.0/);
+    assert.match(result.stdout, new RegExp(VERSION.replace(/\./g, '\\.')));
   });
 
   it('exits 1 for unknown flags', async () => {
@@ -345,10 +347,10 @@ describe('CLI run() range validation (fixture git repo)', () => {
         'git',
         ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
           'commit', '--allow-empty', '-m', message],
-        { cwd: dir },
+        { cwd: dir, env: gitEnv },
       );
 
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
     // Oldest→newest: valid, invalid, valid. The range HEAD~2..HEAD covers
     // the last two, so it always contains exactly one invalid commit.
     await commit('chore: bootstrap fixture');
@@ -376,21 +378,25 @@ describe('CLI run() range validation (fixture git repo)', () => {
     assert.match(result.stdout, /No commits found/);
   });
 
-  it('merges range reports into a single SARIF document', async () => {
+  it('produces a multi-run SARIF document for range validation', async () => {
     const result = await run(['--range', 'HEAD~2..HEAD', '--sarif']);
     assert.equal(result.exitCode, 2);
-    assert.equal(result.stdout, '');
-    const sarif = JSON.parse(result.stderr);
+    assert.equal(result.stderr, '');
+    const sarif = JSON.parse(result.stdout);
     assert.equal(sarif.version, '2.1.0');
-    assert.ok(sarif.runs[0].results.length > 0);
-    assert.equal(sarif.runs[0].results[0].level, 'error');
+    assert.ok(sarif.runs.length > 0);
+    // Each commit gets its own run (F13)
+    const errorRun = sarif.runs.find((r: { results: { level: string }[] }) =>
+      r.results.some((res: { level: string }) => res.level === 'error'),
+    );
+    assert.ok(errorRun, 'at least one run should contain error results');
   });
 
-  it('reports a range as a JSON array of reports', async () => {
+  it('reports a range as a JSON array of reports on stdout', async () => {
     const result = await run(['--range', 'HEAD~2..HEAD', '--json']);
     assert.equal(result.exitCode, 2);
-    assert.equal(result.stdout, '');
-    const reports = JSON.parse(result.stderr);
+    assert.equal(result.stderr, '');
+    const reports = JSON.parse(result.stdout);
     assert.ok(Array.isArray(reports));
     assert.equal(reports.length, 2);
     assert.equal(reports[0].valid, false);

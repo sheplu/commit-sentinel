@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { runCli, runNode } from '../helpers/spawn.ts';
+import { gitEnv } from '../helpers/git-env.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,7 +93,8 @@ describe('CLI e2e', () => {
   it('outputs JSON with --json for invalid message', async () => {
     const result = await runCli(['--message', 'bad message', '--json']);
     assert.equal(result.exitCode, 2);
-    const parsed = JSON.parse(result.stderr);
+    // Structured output goes to stdout regardless of validation result (F12).
+    const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.valid, false);
     assert.ok(parsed.errorCount > 0);
     assert.ok(parsed.results.length > 0);
@@ -110,7 +112,8 @@ describe('CLI e2e', () => {
   it('outputs SARIF with --sarif for invalid message', async () => {
     const result = await runCli(['--message', 'bad message', '--sarif']);
     assert.equal(result.exitCode, 2);
-    const sarif = JSON.parse(result.stderr);
+    // Structured output goes to stdout regardless of validation result (F12).
+    const sarif = JSON.parse(result.stdout);
     assert.equal(sarif.version, '2.1.0');
     assert.ok(sarif.runs[0].results.length > 0);
     assert.equal(sarif.runs[0].results[0].level, 'error');
@@ -439,7 +442,7 @@ describe('CLI e2e range with merge commits', () => {
     previousCwd = process.cwd();
     dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-e2e-merge-'));
 
-    const git = (args: string[]) => execFileAsync('git', args, { cwd: dir });
+    const git = (args: string[]) => execFileAsync('git', args, { cwd: dir, env: gitEnv });
     const commit = (message: string) =>
       git(['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
         'commit', '--allow-empty', '-m', message]);
@@ -486,7 +489,7 @@ describe('CLI e2e symlinked entry (npm bin shims)', () => {
   });
 
   const makeBinShim = () =>
-    symlink(resolve(import.meta.dirname, '..', '..', 'index.ts'), join(dir, 'commit-sentinel'));
+    symlink(resolve(import.meta.dirname, '..', '..', 'src', 'bin.ts'), join(dir, 'commit-sentinel'));
 
   it('prints the version when invoked through a symlinked bin path', async () => {
     await makeBinShim();

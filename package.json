@@ -25,7 +25,7 @@
   },
   "type": "module",
   "bin": {
-    "commit-sentinel": "./dist/index.js"
+    "commit-sentinel": "./dist/src/bin.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -45,7 +45,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "start": "node index.ts",
+    "start": "node src/bin.ts",
     "test": "node --test --test-reporter=spec 'tests/**/*.test.ts'",
     "test:unit": "node --test 'tests/unit/**/*.test.ts'",
     "test:integration": "node --test 'tests/integration/**/*.test.ts'",

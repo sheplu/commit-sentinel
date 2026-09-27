@@ -224,5 +224,32 @@ describe('humanFormatter', () => {
         restoreEnv();
       }
     });
+
+    it('uses TTY detection when no color env vars are set (F29)', () => {
+      delete process.env.NO_COLOR;
+      delete process.env.FORCE_COLOR;
+      try {
+        const output = humanFormatter.format(
+          {
+            valid: false,
+            commit: parseCommit('bad message'),
+            results: [
+              {
+                ruleName: 'format',
+                severity: 'error',
+                problems: [{ message: 'Bad.' }],
+              },
+            ],
+            errorCount: 1,
+            warningCount: 0,
+            skippedGitRules: [],
+          },
+        );
+        // On non-TTY (test runner), should have no ANSI codes
+        assert.ok(!output.includes('\u001b['));
+      } finally {
+        restoreEnv();
+      }
+    });
   });
 });

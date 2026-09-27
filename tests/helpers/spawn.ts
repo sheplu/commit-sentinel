@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const BIN = resolve(import.meta.dirname, '..', '..', 'index.ts');
+const BIN = resolve(import.meta.dirname, '..', '..', 'src', 'bin.ts');
 
 export interface SpawnResult {
   exitCode: number;

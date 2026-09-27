@@ -31,11 +31,10 @@ export const subjectCaseRule = defineRule<SubjectCaseOptions>({
     const first = commit.subject[0]!;
     const caseOption = options.case ?? 'lower';
 
-    // Non-alphabetic first character is always acceptable
-    if (!/[a-zA-Z]/.test(first)) return [];
-
     switch (caseOption) {
       case 'lower':
+        // Non-alphabetic first character is always acceptable for lower case
+        if (!/[a-zA-Z]/.test(first)) return [];
         if (/^[a-z]/.test(first)) return [];
         return [
           {
@@ -44,6 +43,8 @@ export const subjectCaseRule = defineRule<SubjectCaseOptions>({
           },
         ];
       case 'sentence':
+        // Non-alphabetic first character is always acceptable for sentence case
+        if (!/[a-zA-Z]/.test(first)) return [];
         if (/^[A-Z]/.test(first)) return [];
         return [
           {

@@ -5,7 +5,7 @@ Usage: commit-sentinel [options]
 
 Options:
   -m, --message <message>    Validate a commit message string
-  -F, --file <path>          Validate the first line from a commit message file
+  -F, --file <path>          Validate a commit message from a file
   -c, --commit <ref>         Validate a git commit message (default: HEAD)
       --stdin                Read the commit message from stdin
       --range <range>        Validate all commits in a git range (e.g., main..HEAD)

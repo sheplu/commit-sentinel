@@ -33,6 +33,8 @@ export interface ValidationReport {
   warningCount: number;
   /** Names of rules that were skipped because {@link GitMeta} was unavailable. */
   skippedGitRules: string[];
+  /** Git commit SHA, set when validating a range so formatters can identify the commit. */
+  sha?: string;
 }
 
 /**

@@ -4,6 +4,9 @@
  * Each rule maps to a `reportingDescriptor`, each problem to a `result`.
  * No `locations` are emitted since commit messages are not source files.
  *
+ * When a {@link ValidationReport} carries a `sha`, each result includes a
+ * `properties.commitSha` bag so consumers can identify the source commit.
+ *
  * @see {@link https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html | SARIF 2.1.0 spec}
  * @module
  */
@@ -22,6 +25,7 @@ interface SarifResult {
   ruleIndex: number;
   level: 'error' | 'warning' | 'note';
   message: { text: string };
+  properties?: Record<string, unknown>;
 }
 
 interface SarifRun {
@@ -69,12 +73,22 @@ export const sarifFormatter: Formatter = {
       const level = result.severity === 'error' ? 'error' : 'warning';
 
       for (const problem of result.problems) {
-        results.push({
+        const sarifResult: SarifResult = {
           ruleId: result.ruleName,
           ruleIndex,
           level,
           message: { text: problem.message },
-        });
+        };
+
+        // Include commit identity when available (F13)
+        if (report.sha) {
+          sarifResult.properties = { commitSha: report.sha };
+          sarifResult.message = {
+            text: `[${report.sha.slice(0, 8)}] ${problem.message}`,
+          };
+        }
+
+        results.push(sarifResult);
       }
     }
 

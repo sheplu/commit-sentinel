@@ -181,7 +181,7 @@ const issueReferenceRule = defineRule<{ pattern?: string }>({
 
 Two requirements to keep in mind:
 
-- **`validateOptions` must accept `{}`.** Plugin rules are auto-enabled with empty options — the plugin API has no way to declare default option values — so treat every absent field as "use my default". A rule whose `validateOptions` rejects `{}` cannot be loaded at all.
+- **`validateOptions` must accept `{}` for auto-enabling.** Plugin rules are auto-enabled with empty options, so treat every absent field as "use my default". If your rule has required options, users can supply them via a `rules` override (e.g. `rules: { 'my-rule': ['error', { mode: 'strict' }] }`) — the override replaces the empty defaults before `validateOptions` runs. However, a rule that rejects `{}` cannot be auto-enabled without an explicit override.
 - **`validate` should not throw on malformed options.** Configs built programmatically (bypassing `loadConfig`) skip load-time checks, so report a problem instead of throwing.
 
 ## Git-metadata rules
