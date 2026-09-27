@@ -90,6 +90,28 @@ describe('sarifFormatter', () => {
     }
   });
 
+  it('includes commit identity when the report carries a sha', () => {
+    const output = sarifFormatter.format({
+      valid: false,
+      commit: parseCommit('bad'),
+      sha: '0123456789abcdef0123456789abcdef01234567',
+      results: [
+        {
+          ruleName: 'format',
+          severity: 'error',
+          problems: [{ message: 'Bad format.' }],
+        },
+      ],
+      errorCount: 1,
+      warningCount: 0,
+      skippedGitRules: [],
+    });
+    const sarif = JSON.parse(output);
+    const result = sarif.runs[0].results[0];
+    assert.equal(result.properties.commitSha, '0123456789abcdef0123456789abcdef01234567');
+    assert.match(result.message.text, /^\[01234567\] Bad format\.$/);
+  });
+
   it('falls back to the rule name when the rule is not a builtin', () => {
     const output = sarifFormatter.format({
       valid: false,

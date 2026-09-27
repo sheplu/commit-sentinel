@@ -25,7 +25,7 @@
   },
   "type": "module",
   "bin": {
-    "commit-sentinel": "./dist/bin.js"
+    "commit-sentinel": "./dist/src/bin.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

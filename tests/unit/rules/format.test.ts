@@ -27,4 +27,27 @@ describe('format rule', () => {
     const problems = run(invalid.empty);
     assert.equal(problems.length, 1);
   });
+
+  it('rejects separator that is not colon-space', () => {
+    const problems = run('feat:\tadd login');
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /": "/);
+  });
+
+  it('rejects whitespace-only scope', () => {
+    const problems = run('feat(   ): add login');
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /Scope must not be empty/);
+  });
+
+  it('rejects body not separated from header by a blank line', () => {
+    const problems = run('feat: add login\nbody without blank line');
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /blank line/);
+  });
+
+  it('reports all structural problems at once', () => {
+    const problems = run('feat(  ):\tadd login\nno blank line');
+    assert.equal(problems.length, 3);
+  });
 });

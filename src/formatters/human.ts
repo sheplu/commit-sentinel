@@ -32,8 +32,7 @@ const ANSI: Record<string, [string, string]> = {
  */
 function style(text: string, format: string, color: boolean): string {
   if (!color) return text;
-  const pair = ANSI[format];
-  if (!pair) return text;
+  const pair = ANSI[format]!;
   return `${pair[0]}${text}${pair[1]}`;
 }
 

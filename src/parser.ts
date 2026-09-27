@@ -116,12 +116,9 @@ function extractBodyAndFooters(lines: string[]): {
   const footerStart = findFooterSectionStart(lines, start, end);
 
   if (footerStart === start) {
-    // The entire content block is footers (no body).
-    const footers = parseFooterSection(lines, start, end);
-    if (footers !== null) {
-      return { body: null, footers };
-    }
-    return { body: joinLines(lines, start, end), footers: [] };
+    // The entire content block is footers (no body). findFooterSectionStart
+    // only returns `start` when the block parses as a footer section.
+    return { body: null, footers: parseFooterSection(lines, start, end)! };
   }
 
   if (footerStart === -1) {
@@ -129,15 +126,12 @@ function extractBodyAndFooters(lines: string[]): {
     return { body: joinLines(lines, start, end), footers: [] };
   }
 
-  // Footer section found after body.
-  const footers = parseFooterSection(lines, footerStart, end);
-  if (footers !== null) {
-    // The body ends at the blank line preceding the footer section.
-    const body = joinLines(lines, start, footerStart - 1);
-    return { body, footers };
-  }
-
-  return { body: joinLines(lines, start, end), footers: [] };
+  // Footer section found after body — already validated by
+  // findFooterSectionStart, so it always parses. The body ends at the blank
+  // line preceding the footer section.
+  const footers = parseFooterSection(lines, footerStart, end)!;
+  const body = joinLines(lines, start, footerStart - 1);
+  return { body, footers };
 }
 
 /**
