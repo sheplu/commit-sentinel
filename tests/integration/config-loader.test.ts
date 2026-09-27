@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -510,10 +510,16 @@ describe('loadConfig', () => {
 
     it('all built-in presets pass option validation', async () => {
       for (const preset of ['strict', 'conventional', 'angular', 'hardened']) {
+        // Use a distinct directory per preset to avoid ESM module cache reuse
+        const presetDir = join(dir, preset);
+        await mkdir(presetDir);
         const configContent = `export default { extends: '${preset}' };`;
-        await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
-        const config = await loadConfig(dir);
+        await writeFile(join(presetDir, 'commit-sentinel.config.ts'), configContent);
+        const config = await loadConfig(presetDir);
         assert.ok(config.rules, `preset "${preset}" should resolve without error`);
+        // Verify each preset returns its expected rule count
+        const ruleCount = Object.keys(config.rules).length;
+        assert.ok(ruleCount > 0, `preset "${preset}" should have active rules`);
       }
     });
 

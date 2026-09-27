@@ -6,40 +6,30 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { parseGitMeta, readCommitMessage, readGitMeta, readGitMetaOrNull, listCommitsInRange } from '../../src/git.ts';
+import { gitEnv } from '../helpers/git-env.ts';
 
 const execFileAsync = promisify(execFile);
 
 describe('parseGitMeta', () => {
-  it('parses an unsigned commit (N)', () => {
-    assert.deepEqual(parseGitMeta('dev@example.com\nN\n'), {
+  it('parses an unsigned commit (empty key)', () => {
+    assert.deepEqual(parseGitMeta('dev@example.com\n\n'), {
       authorEmail: 'dev@example.com',
       signed: false,
     });
   });
 
-  it('treats a good signature (G) as signed', () => {
-    assert.deepEqual(parseGitMeta('dev@example.com\nG\n'), {
+  it('treats a non-empty signer key as signed', () => {
+    assert.deepEqual(parseGitMeta('dev@example.com\nABCD1234\n'), {
       authorEmail: 'dev@example.com',
       signed: true,
     });
   });
 
-  it('treats a bad signature (B) as signed', () => {
-    assert.equal(parseGitMeta('dev@example.com\nB\n').signed, true);
+  it('treats an SSH key fingerprint as signed', () => {
+    assert.equal(parseGitMeta('dev@example.com\nSHA256:abc123\n').signed, true);
   });
 
-  it('treats an untrusted signature (U) as signed', () => {
-    assert.equal(parseGitMeta('dev@example.com\nU\n').signed, true);
-  });
-
-  it('treats a signature error (E) as unsigned', () => {
-    assert.deepEqual(parseGitMeta('dev@example.com\nE\n'), {
-      authorEmail: 'dev@example.com',
-      signed: false,
-    });
-  });
-
-  it('defaults the signature status to N for single-line output', () => {
+  it('defaults the signer key to empty for single-line output', () => {
     assert.deepEqual(parseGitMeta('dev@example.com'), {
       authorEmail: 'dev@example.com',
       signed: false,
@@ -53,10 +43,17 @@ describe('parseGitMeta', () => {
     });
   });
 
-  it('trims surrounding whitespace', () => {
-    assert.deepEqual(parseGitMeta('  dev@example.com\nN  '), {
-      authorEmail: 'dev@example.com',
+  it('preserves empty author email (F26)', () => {
+    assert.deepEqual(parseGitMeta('\n\n'), {
+      authorEmail: '',
       signed: false,
+    });
+  });
+
+  it('preserves empty author email with a signer key (F26)', () => {
+    assert.deepEqual(parseGitMeta('\nABCD1234\n'), {
+      authorEmail: '',
+      signed: true,
     });
   });
 });
@@ -114,7 +111,7 @@ describe('merge commits in ranges', () => {
     previousCwd = process.cwd();
     dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-merge-'));
 
-    const git = (args: string[]) => execFileAsync('git', args, { cwd: dir });
+    const git = (args: string[]) => execFileAsync('git', args, { cwd: dir, env: gitEnv });
     const commit = (message: string) =>
       git(['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
         'commit', '--allow-empty', '-m', message]);

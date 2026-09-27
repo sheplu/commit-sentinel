@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { ActiveSeverity, Rule, RuleConfig, Severity } from '../rules/types.ts';
 import type { UserConfig } from './define-config.ts';
 import { builtinRules } from '../rules/registry.ts';
@@ -74,7 +75,7 @@ async function loadUserConfig(
   }
 
   try {
-    const mod = (await import(filePath)) as { default?: UserConfig };
+    const mod = (await import(pathToFileURL(filePath).href)) as { default?: UserConfig };
     return mod.default ?? null;
   } catch (err) {
     throw new Error(
@@ -90,7 +91,11 @@ function resolveConfig(
   const plugins = userConfig.plugins ?? [];
   const ruleRegistry = buildRegistry(plugins);
 
-  const merged: Record<string, RuleConfig> = { ...preset };
+  const merged: Record<string, RuleConfig> = Object.create(null);
+  for (const [key, value] of Object.entries(preset)) {
+    // Deep clone array configs to prevent shared mutable state (F16)
+    merged[key] = Array.isArray(value) ? [value[0], structuredClone(value[1])] as RuleConfig : value;
+  }
 
   // Auto-enable plugin rules at their declared default severity
   for (const plugin of plugins) {
@@ -110,7 +115,7 @@ function resolveConfig(
   }
 
   // Normalize to ResolvedRuleEntry, filtering out 'off' rules
-  const rules: Record<string, ResolvedRuleEntry> = {};
+  const rules: Record<string, ResolvedRuleEntry> = Object.create(null);
   for (const [name, config] of Object.entries(merged)) {
     const entry = normalizeRuleConfig(name, config);
     if (entry !== null) {
@@ -201,5 +206,5 @@ function normalizeRuleConfig(name: string, config: RuleConfig): ResolvedRuleEntr
       `Invalid options for rule "${name}": expected an object, got: ${typeof config[1]}.`,
     );
   }
-  return { severity, options: config[1] ?? {} };
+  return { severity, options: config[1] !== undefined ? structuredClone(config[1]) : {} };
 }

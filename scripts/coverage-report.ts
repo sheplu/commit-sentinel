@@ -25,6 +25,13 @@ interface CategoryStats {
   functionsFound: number;
 }
 
+/** Per-file coverage data used for deduplication when merging categories. */
+interface FileCoverage {
+  lines: Map<number, number>;       // line number → hit count
+  branches: Map<number, number>;    // branch number → hit count
+  functions: Map<string, number>;   // function name → hit count
+}
+
 function parseLcov(content: string): CategoryStats {
   const stats: CategoryStats = {
     linesHit: 0,
@@ -45,6 +52,88 @@ function parseLcov(content: string): CategoryStats {
   }
 
   return stats;
+}
+
+/**
+ * Parse LCOV content into per-file coverage maps for deduplication.
+ *
+ * When the same source file appears in multiple category LCOV files,
+ * we take the max hit count per line/branch/function so that combined
+ * coverage is the union — not the sum — across categories.
+ */
+function parseLcovDetailed(content: string): Map<string, FileCoverage> {
+  const files = new Map<string, FileCoverage>();
+  let currentFile: FileCoverage | null = null;
+  let branchIndex = 0;
+
+  for (const line of content.split('\n')) {
+    if (line.startsWith('SF:')) {
+      const path = line.slice(3);
+      if (!files.has(path)) {
+        files.set(path, { lines: new Map(), branches: new Map(), functions: new Map() });
+      }
+      currentFile = files.get(path)!;
+      branchIndex = 0;
+    } else if (line === 'end_of_record') {
+      currentFile = null;
+    } else if (currentFile && line.startsWith('DA:')) {
+      const parts = line.slice(3).split(',');
+      const lineNum = parseInt(parts[0]!, 10);
+      const hits = parseInt(parts[1]!, 10);
+      currentFile.lines.set(lineNum, Math.max(currentFile.lines.get(lineNum) ?? 0, hits));
+    } else if (currentFile && line.startsWith('BRDA:')) {
+      branchIndex++;
+      const parts = line.slice(5).split(',');
+      const hits = parts[3] === '-' ? 0 : parseInt(parts[3]!, 10);
+      currentFile.branches.set(branchIndex, Math.max(currentFile.branches.get(branchIndex) ?? 0, hits));
+    } else if (currentFile && line.startsWith('FNDA:')) {
+      const parts = line.slice(5).split(',');
+      const hits = parseInt(parts[0]!, 10);
+      const name = parts.slice(1).join(',');
+      currentFile.functions.set(name, Math.max(currentFile.functions.get(name) ?? 0, hits));
+    }
+  }
+
+  return files;
+}
+
+/** Merge per-file coverage maps, taking the max hit count per entry. */
+function mergeCoverage(maps: Map<string, FileCoverage>[]): CategoryStats {
+  const merged = new Map<string, FileCoverage>();
+
+  for (const fileMap of maps) {
+    for (const [path, cov] of fileMap) {
+      if (!merged.has(path)) {
+        merged.set(path, { lines: new Map(), branches: new Map(), functions: new Map() });
+      }
+      const target = merged.get(path)!;
+
+      for (const [line, hits] of cov.lines) {
+        target.lines.set(line, Math.max(target.lines.get(line) ?? 0, hits));
+      }
+      for (const [branch, hits] of cov.branches) {
+        target.branches.set(branch, Math.max(target.branches.get(branch) ?? 0, hits));
+      }
+      for (const [fn, hits] of cov.functions) {
+        target.functions.set(fn, Math.max(target.functions.get(fn) ?? 0, hits));
+      }
+    }
+  }
+
+  let linesHit = 0, linesFound = 0;
+  let branchesHit = 0, branchesFound = 0;
+  let functionsHit = 0, functionsFound = 0;
+
+  for (const cov of merged.values()) {
+    linesFound += cov.lines.size;
+    linesHit += [...cov.lines.values()].filter((h) => h > 0).length;
+    branchesFound += cov.branches.size;
+    branchesHit += [...cov.branches.values()].filter((h) => h > 0).length;
+    functionsFound += cov.functions.size;
+    functionsHit += [...cov.functions.values()].filter((h) => h > 0).length;
+  }
+
+  return { linesHit, linesFound, branchesHit, branchesFound, functionsHit, functionsFound };
 }
 
 function pct(hit: number, found: number): string {
@@ -69,27 +158,18 @@ async function main() {
   }
 
   const categories: Record<string, CategoryStats> = {};
-  const totals: CategoryStats = {
-    linesHit: 0,
-    linesFound: 0,
-    branchesHit: 0,
-    branchesFound: 0,
-    functionsHit: 0,
-    functionsFound: 0,
-  };
+  const detailedMaps: Map<string, FileCoverage>[] = [];
 
   for (const file of lcovFiles) {
     const content = await readFile(join(coverageDir, file), 'utf8');
     const name = file.replace('.lcov', '');
-    const stats = parseLcov(content);
-    categories[name] = stats;
-    totals.linesHit += stats.linesHit;
-    totals.linesFound += stats.linesFound;
-    totals.branchesHit += stats.branchesHit;
-    totals.branchesFound += stats.branchesFound;
-    totals.functionsHit += stats.functionsHit;
-    totals.functionsFound += stats.functionsFound;
+    categories[name] = parseLcov(content);
+    detailedMaps.push(parseLcovDetailed(content));
   }
+
+  // Merge coverage across categories by source file, taking the union
+  // of covered lines/branches/functions (max hit count per entry).
+  const totals = mergeCoverage(detailedMaps);
 
   const lines: string[] = [
     MARKER,

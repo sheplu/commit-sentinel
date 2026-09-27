@@ -100,51 +100,113 @@ function extractBodyAndFooters(lines: string[]): {
     start++;
   }
 
-  if (start >= lines.length) {
+  // F01: Trim trailing blank lines before footer search so that a trailing
+  // newline (from files, git %B, stdin) does not push footerStart past the end.
+  let end = lines.length;
+  while (end > start && lines[end - 1]!.trim() === '') {
+    end--;
+  }
+
+  if (start >= end) {
     return { body: null, footers: [] };
   }
 
-  // Find the last paragraph block — if it consists entirely of footer lines
-  // (and their continuations), treat it as the footer section.
-  const lastBlank = findLastBlankLine(lines, start);
+  // F02: Find the footer section by scanning backward through paragraph
+  // boundaries. This supports multi-paragraph footer values (spec rule 10).
+  const footerStart = findFooterSectionStart(lines, start, end);
 
-  if (lastBlank === -1) {
-    // No blank line in the remainder — everything is one block.
-    // Check if the entire block is footers.
-    const footers = tryParseFooters(lines, start);
+  if (footerStart === start) {
+    // The entire content block is footers (no body).
+    const footers = parseFooterSection(lines, start, end);
     if (footers !== null) {
       return { body: null, footers };
     }
-    return { body: joinLines(lines, start, lines.length), footers: [] };
+    return { body: joinLines(lines, start, end), footers: [] };
   }
 
-  // Try to parse the last paragraph as footers.
-  const footerStart = lastBlank + 1;
-  const footers = tryParseFooters(lines, footerStart);
+  if (footerStart === -1) {
+    // No footer section found — everything is body.
+    return { body: joinLines(lines, start, end), footers: [] };
+  }
+
+  // Footer section found after body.
+  const footers = parseFooterSection(lines, footerStart, end);
   if (footers !== null) {
-    const body = joinLines(lines, start, lastBlank);
+    // The body ends at the blank line preceding the footer section.
+    const body = joinLines(lines, start, footerStart - 1);
     return { body, footers };
   }
 
-  // Last paragraph is not footers — treat everything as body.
-  return { body: joinLines(lines, start, lines.length), footers: [] };
+  return { body: joinLines(lines, start, end), footers: [] };
 }
 
-function findLastBlankLine(lines: string[], from: number): number {
-  for (let i = lines.length - 1; i >= from; i--) {
-    if (lines[i]!.trim() === '') return i;
+/**
+ * Find where the footer section begins by trying candidate start positions.
+ *
+ * A footer section must begin with a line matching FOOTER_LINE_RE and must be
+ * separated from the body by a blank line (or start at the very beginning of
+ * the content). Multi-paragraph footer values (spec rule 10) mean blank lines
+ * can appear *within* the footer section, so we cannot rely on the last blank
+ * line alone.
+ *
+ * Strategy: collect all paragraph boundaries (blank lines), then try each one
+ * as a potential footer section start — earliest first. The first boundary
+ * whose following content parses entirely as footers (tokens + continuations)
+ * is chosen. This finds the longest valid footer section.
+ *
+ * Returns the line index where the footer section starts, or -1 if no footer
+ * section is found.
+ */
+function findFooterSectionStart(lines: string[], start: number, end: number): number {
+  // Collect paragraph boundary indices (indices of blank lines within the range).
+  const blanks: number[] = [];
+  for (let i = start; i < end; i++) {
+    if (lines[i]!.trim() === '') blanks.push(i);
   }
+
+  if (blanks.length === 0) {
+    // Single paragraph — check if it starts with a footer token.
+    if (FOOTER_LINE_RE.test(lines[start]!)) return start;
+    return -1;
+  }
+
+  // Also consider `start` itself — the entire block after the header might be
+  // a footer section with multi-paragraph values and no body.
+  const candidates: number[] = [];
+  if (FOOTER_LINE_RE.test(lines[start]!)) candidates.push(start);
+  for (const blank of blanks) {
+    const paraStart = blank + 1;
+    if (paraStart >= end) continue;
+    if (FOOTER_LINE_RE.test(lines[paraStart]!)) candidates.push(paraStart);
+  }
+
+  // Try each candidate, earliest first. The first one where everything from
+  // that point parses as footers gives the longest valid footer section.
+  for (const candidate of candidates) {
+    if (parseFooterSection(lines, candidate, end) !== null) return candidate;
+  }
+
   return -1;
 }
 
-function tryParseFooters(lines: string[], from: number): Footer[] | null {
+/**
+ * Parse the footer section from `from` to `end`. Blank lines within the section
+ * are treated as part of multi-paragraph footer values (spec rule 10).
+ */
+function parseFooterSection(lines: string[], from: number, end: number): Footer[] | null {
   const footers: Footer[] = [];
   let current: Footer | null = null;
 
-  for (let i = from; i < lines.length; i++) {
+  for (let i = from; i < end; i++) {
     const line = lines[i]!;
-    // Skip trailing empty lines
-    if (line.trim() === '' && i === lines.length - 1) continue;
+
+    if (line.trim() === '') {
+      // Blank line within the footer section — part of a multi-paragraph value.
+      if (current !== null) {
+        current.value += '\n';
+      }
+      continue;
+    }
 
     const match = FOOTER_LINE_RE.exec(line);
     if (match?.groups) {
@@ -154,7 +216,7 @@ function tryParseFooters(lines: string[], from: number): Footer[] | null {
       // Continuation line — append to current footer value.
       current.value += `\n${line}`;
     } else {
-      // First line is not a footer — this paragraph is not a footer section.
+      // First non-blank line is not a footer — not a footer section.
       return null;
     }
   }

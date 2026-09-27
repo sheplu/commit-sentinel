@@ -17,7 +17,7 @@ Validate git commit messages.
 
 Options:
   -m, --message <message>    Validate a commit message string
-  -F, --file <path>          Validate the first line from a commit message file
+  -F, --file <path>          Validate a commit message from a file
   -c, --commit <ref>         Validate a git commit message (default: HEAD)
       --stdin                Read the commit message from stdin
       --range <range>        Validate all commits in a git range (e.g., main..HEAD)
@@ -140,6 +140,10 @@ export async function run(argv: ReadonlyArray<string>): Promise<RunResult> {
     if (report.valid) {
       return { exitCode: 0, stdout: output, stderr: '' };
     }
+    // Structured formats always go to stdout (F12); human goes to stderr.
+    if (formatter !== humanFormatter) {
+      return { exitCode: 2, stdout: output, stderr: '' };
+    }
     return { exitCode: 2, stdout: '', stderr: output };
   } catch (err) {
     return {
@@ -156,7 +160,23 @@ async function validateRange(
   formatter: Formatter,
 ): Promise<RunResult> {
   const shas = await listCommitsInRange(range);
+
+  // Empty range — return proper structured output per format (F11).
   if (shas.length === 0) {
+    if (formatter === jsonFormatter) {
+      return { exitCode: 0, stdout: '[]\n', stderr: '' };
+    }
+    if (formatter === sarifFormatter) {
+      const emptySarif = JSON.stringify({
+        version: '2.1.0',
+        $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+        runs: [{
+          tool: { driver: { name: 'commit-sentinel', version: VERSION, rules: [] } },
+          results: [],
+        }],
+      }, null, 2) + '\n';
+      return { exitCode: 0, stdout: emptySarif, stderr: '' };
+    }
     return {
       exitCode: 0,
       stdout: `No commits found in range "${range}".\n`,
@@ -171,6 +191,8 @@ async function validateRange(
     const message = await readCommitMessage(sha);
     const git = await readGitMetaOrNull(sha);
     const report = validate(message, config, git);
+    // Attach SHA for structured formatters that need commit identity (F13).
+    report.sha = sha;
     reports.push(report);
     if (!report.valid) hasError = true;
   }
@@ -180,16 +202,41 @@ async function validateRange(
   if (formatter === jsonFormatter) {
     output = JSON.stringify(reports, null, 2) + '\n';
   } else if (formatter === sarifFormatter) {
-    // Merge all results into a single SARIF run.
-    output = formatter.format(mergeReports(reports));
+    // Format each report individually, then combine into a multi-run SARIF log
+    // so that each commit's findings are identifiable (F13).
+    output = formatSarifRange(reports);
   } else {
     output = reports.map((r) => formatter.format(r)).join('');
   }
 
+  // Structured formats always go to stdout (F12); human goes to stderr on error.
   if (hasError) {
-    return { exitCode: 2, stdout: '', stderr: output };
+    if (formatter === humanFormatter) {
+      return { exitCode: 2, stdout: '', stderr: output };
+    }
+    return { exitCode: 2, stdout: output, stderr: '' };
   }
   return { exitCode: 0, stdout: output, stderr: '' };
+}
+
+/**
+ * Build a multi-run SARIF log from per-commit reports.
+ *
+ * Each commit becomes its own SARIF run so consumers can identify which commit
+ * produced each finding.
+ */
+function formatSarifRange(reports: ValidationReport[]): string {
+  const runs = reports.map((report) => {
+    const doc = JSON.parse(sarifFormatter.format(report));
+    return doc.runs[0];
+  });
+
+  const sarif = {
+    version: '2.1.0',
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    runs,
+  };
+  return JSON.stringify(sarif, null, 2) + '\n';
 }
 
 async function resolveMessage(values: {
@@ -202,18 +249,6 @@ async function resolveMessage(values: {
   if (values.file !== undefined) return readFile(values.file, 'utf8');
   if (values.stdin) return readStdin();
   return readCommitMessage(values.commit ?? 'HEAD');
-}
-
-function mergeReports(reports: ValidationReport[]): ValidationReport {
-  const merged: ValidationReport = {
-    valid: reports.every((r) => r.valid),
-    commit: reports[0]!.commit,
-    results: reports.flatMap((r) => r.results),
-    errorCount: reports.reduce((sum, r) => sum + r.errorCount, 0),
-    warningCount: reports.reduce((sum, r) => sum + r.warningCount, 0),
-    skippedGitRules: [...new Set(reports.flatMap((r) => r.skippedGitRules))],
-  };
-  return merged;
 }
 
 function readStdin(): Promise<string> {

@@ -5,9 +5,11 @@ interface AgentAttributionOptions {
   patterns?: string[];
 }
 
+type PatternEntry = RegExp | ((raw: string) => boolean);
+
 interface AgentEntry {
   label: string;
-  patterns: RegExp[];
+  patterns: PatternEntry[];
 }
 
 const KNOWN_AGENTS: ReadonlyMap<string, AgentEntry> = new Map([
@@ -16,7 +18,11 @@ const KNOWN_AGENTS: ReadonlyMap<string, AgentEntry> = new Map([
     patterns: [
       /^co-authored-by:\s.*\bclaude\b/im,
       /^co-authored-by:\s.*noreply@anthropic\.com/im,
-      /generated with .*claude code/i,
+      (raw) => {
+        const lower = raw.toLowerCase();
+        const genIdx = lower.indexOf('generated with');
+        return genIdx !== -1 && lower.indexOf('claude code', genIdx) !== -1;
+      },
     ],
   }],
   ['copilot', {
@@ -148,7 +154,10 @@ export const agentAttributionRule = defineRule<AgentAttributionOptions>({
     for (const [id, agent] of KNOWN_AGENTS) {
       if (allowSet.has(id)) continue;
       for (const pattern of agent.patterns) {
-        if (pattern.test(commit.raw)) {
+        const match = typeof pattern === 'function'
+          ? pattern(commit.raw)
+          : pattern.test(commit.raw);
+        if (match) {
           problems.push({
             message: `Commit contains ${agent.label} attribution marker.`,
             suggestion: `Remove the ${agent.label} attribution or add "${id}" to the allow list.`,

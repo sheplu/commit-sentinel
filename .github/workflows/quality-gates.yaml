@@ -35,7 +35,7 @@ jobs:
 
       - name: Validate PR Commits
         run: |
-          node index.ts --base origin/${{ github.event.pull_request.base.ref }}
+          node src/bin.ts --base origin/${{ github.event.pull_request.base.ref }}
 
   osv-scan:
     name: OSV Scan

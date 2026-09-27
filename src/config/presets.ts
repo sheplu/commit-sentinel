@@ -84,11 +84,10 @@ const presets: Record<string, Preset> = { strict, conventional, angular, hardene
  * @throws When the name does not match any built-in preset.
  */
 export function getPreset(name: string): Preset {
-  const preset = presets[name];
-  if (!preset) {
+  if (!Object.hasOwn(presets, name)) {
     throw new Error(
       `Unknown preset "${name}". Available presets: ${Object.keys(presets).join(', ')}.`,
     );
   }
-  return preset;
+  return presets[name]!;
 }
