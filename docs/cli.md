@@ -71,6 +71,10 @@ commit-sentinel --message "feat: add login" --config path/to/config.ts
 
 Full `ValidationReport` object with `valid`, `commit`, `results`, `errorCount`, `warningCount`.
 
+### Range output
+
+With `--range`/`--base`, JSON output is an **array** of reports (one per commit, each carrying its `sha`) and SARIF output contains one run per commit. When a range-scoped rule (e.g. `max-commits`) finds a problem, one extra report/run is appended: it carries a `range` field instead of a `sha` and is not tied to any single commit.
+
 ### SARIF (`--sarif`)
 
 [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for integration with GitHub Code Scanning and other static analysis tools.

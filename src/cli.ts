@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { readCommitMessage, readGitMetaOrNull, listCommitsInRange } from './git.ts';
 import { loadConfig } from './config/loader.ts';
 import type { ResolvedConfig } from './config/loader.ts';
-import { validate } from './runner.ts';
+import { validate, validateRangeRules } from './runner.ts';
 import type { ValidationReport } from './runner.ts';
 import { humanFormatter } from './formatters/human.ts';
 import { jsonFormatter } from './formatters/json.ts';
@@ -195,6 +195,15 @@ async function validateRange(
     report.sha = sha;
     reports.push(report);
     if (!report.valid) hasError = true;
+  }
+
+  // Range-scoped rules (e.g. max-commits) run once against the whole range.
+  // The empty-range early-exit above never reaches here: zero commits cannot
+  // exceed any configured maximum.
+  const rangeReport = validateRangeRules(range, shas.length, config);
+  if (rangeReport) {
+    reports.push(rangeReport);
+    if (!rangeReport.valid) hasError = true;
   }
 
   // For structured formats, wrap multiple reports in a single valid document.

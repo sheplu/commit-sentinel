@@ -23,4 +23,6 @@ if (!report.valid) {
 }
 ```
 
+For ranges, `validateRangeRules(range, commitCount, config)` runs the range-scoped rules (those defining `checkRange`, e.g. `max-commits`) and returns a synthetic `ValidationReport` carrying `range` instead of `sha` — or `null` when nothing fired.
+
 Also exported: `defineConfig` and `defineRule` for custom configs and rules — see [plugins.md](./plugins.md) for the custom-rule guide — as well as `getPreset`, `builtinRules`, and the `human`, `json`, and `sarif` formatters.

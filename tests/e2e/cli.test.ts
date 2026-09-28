@@ -517,3 +517,58 @@ describe('CLI e2e symlinked entry (npm bin shims)', () => {
     assert.match(result.stdout, /imported function/);
   });
 });
+
+describe('CLI e2e max-commits range rule', () => {
+  let dir: string;
+  let previousCwd: string;
+
+  beforeEach(async () => {
+    previousCwd = process.cwd();
+    dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-e2e-maxcommits-'));
+
+    const commit = (message: string) =>
+      execFileAsync(
+        'git',
+        ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+          'commit', '--allow-empty', '-m', message],
+        { cwd: dir, env: gitEnv },
+      );
+
+    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
+    await commit('chore: first');
+    await commit('chore: second');
+    await commit('chore: third');
+    await commit('chore: fourth');
+    await writeFile(
+      join(dir, 'max.config.ts'),
+      `export default { extends: 'strict', rules: { 'max-commits': ['error', { max: 2 }] } };`,
+    );
+    process.chdir(dir);
+  });
+
+  afterEach(async () => {
+    process.chdir(previousCwd);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('fails a range containing more commits than the maximum', async () => {
+    const result = await runCli(['--range', 'HEAD~3..HEAD', '--config', 'max.config.ts']);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Invalid commit range: HEAD~3\.\.HEAD/);
+    assert.match(result.stderr, /\[max-commits\]/);
+  });
+
+  it('appends the synthetic range report to the JSON output', async () => {
+    const result = await runCli([
+      '--range', 'HEAD~3..HEAD', '--json', '--config', 'max.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    const reports = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(reports));
+    assert.equal(reports.length, 4);
+    assert.equal(reports[3].range, 'HEAD~3..HEAD');
+    assert.equal(reports[3].valid, false);
+    assert.equal(reports[3].results[0].ruleName, 'max-commits');
+  });
+});

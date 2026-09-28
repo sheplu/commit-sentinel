@@ -253,3 +253,76 @@ describe('humanFormatter', () => {
     });
   });
 });
+
+describe('humanFormatter range reports', () => {
+  it('formats an invalid range report', () => {
+    const output = humanFormatter.format(
+      {
+        valid: false,
+        commit: parseCommit(''),
+        range: 'main..HEAD',
+        results: [
+          {
+            ruleName: 'max-commits',
+            severity: 'error',
+            problems: [
+              {
+                message: 'Range main..HEAD contains 12 commits, exceeds maximum of 10.',
+                suggestion: 'Squash or split the branch.',
+              },
+            ],
+          },
+        ],
+        errorCount: 1,
+        warningCount: 0,
+        skippedGitRules: [],
+      },
+      { color: false },
+    );
+    assert.match(output, /✖ Invalid commit range: main\.\.HEAD/);
+    assert.match(output, /exceeds maximum of 10/);
+    assert.match(output, /\[max-commits\]/);
+    assert.doesNotMatch(output, /<empty>/);
+  });
+
+  it('formats a range report with warnings only', () => {
+    const output = humanFormatter.format(
+      {
+        valid: true,
+        commit: parseCommit(''),
+        range: 'main..HEAD',
+        results: [
+          {
+            ruleName: 'max-commits',
+            severity: 'warn',
+            problems: [
+              { message: 'Range main..HEAD contains 12 commits, exceeds maximum of 10.' },
+            ],
+          },
+        ],
+        errorCount: 0,
+        warningCount: 1,
+        skippedGitRules: [],
+      },
+      { color: false },
+    );
+    assert.match(output, /✔ Valid commit range: main\.\.HEAD/);
+    assert.match(output, /1 warning/);
+  });
+
+  it('formats a clean range report', () => {
+    const output = humanFormatter.format(
+      {
+        valid: true,
+        commit: parseCommit(''),
+        range: 'main..HEAD',
+        results: [],
+        errorCount: 0,
+        warningCount: 0,
+        skippedGitRules: [],
+      },
+      { color: false },
+    );
+    assert.match(output, /✔ Valid commit range: main\.\.HEAD/);
+  });
+});

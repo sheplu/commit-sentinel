@@ -6,6 +6,8 @@
  *
  * When a {@link ValidationReport} carries a `sha`, each result includes a
  * `properties.commitSha` bag so consumers can identify the source commit.
+ * Range-level reports (carrying `range` instead of `sha`) include a
+ * `properties.range` bag instead.
  *
  * @see {@link https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html | SARIF 2.1.0 spec}
  * @module
@@ -86,6 +88,11 @@ export const sarifFormatter: Formatter = {
           sarifResult.message = {
             text: `[${report.sha.slice(0, 8)}] ${problem.message}`,
           };
+        }
+
+        // Range-level reports carry the range instead of a commit SHA.
+        if (report.range) {
+          sarifResult.properties = { ...sarifResult.properties, range: report.range };
         }
 
         results.push(sarifResult);

@@ -16,8 +16,11 @@
 | `author-email` | git | `{ pattern?: string }` | Match any (`.+`) |
 | `signed` | git | — | Signing not required |
 | `agent-attribution` | content | `{ allow?: string[], patterns?: string[] }` | Block all known AI-agent markers |
+| `max-commits` | git | `{ max?: number }` | 10 commits per range |
 
 > **`agent-attribution` known agents:** `claude`, `copilot`, `cursor`, `gemini`, `codex`, `vibe` (Mistral), `aider`, `opencode`, `windsurf` (Cascade). Use `allow` to exempt specific agents; `patterns` to add extra deny regexes for agents not yet in the built-in set. Unknown IDs in `allow` fail at validation time. `patterns` entries are plain regex sources — the `i` and `m` flags are applied automatically.
+
+> **`max-commits` is range-scoped:** it is only evaluated when validating a range (`--range`, `--base`) and counts the commits in the range, not any single message. In single-message modes (`--message`, `--file`, `--commit`, `--stdin`) it is silently inapplicable (no skip notice). Merge commits never count toward the limit — ranges are enumerated with `git rev-list --no-merges` by design.
 
 **Git-metadata rules** (`author-email`, `signed`) require an actual git commit ref. They are automatically skipped (with a notice) when validating message text directly (`--message`, `--stdin`, `--file`).
 

@@ -5,6 +5,7 @@ export type {
   Rule,
   RuleMeta,
   RuleContext,
+  RangeRuleContext,
   RuleProblem,
   RuleConfig,
   RuleCategory,

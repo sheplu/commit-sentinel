@@ -11,7 +11,7 @@ export { defineRule } from './rules/define-rule.ts';
 export { builtinRules, getRule } from './rules/registry.ts';
 
 // Runner
-export { validate } from './runner.ts';
+export { validate, validateRangeRules } from './runner.ts';
 
 // Formatters
 export { humanFormatter } from './formatters/human.ts';
@@ -26,6 +26,7 @@ export type {
   Rule,
   RuleMeta,
   RuleContext,
+  RangeRuleContext,
   RuleProblem,
   RuleConfig,
   RuleCategory,

@@ -35,6 +35,8 @@ export interface ValidationReport {
   skippedGitRules: string[];
   /** Git commit SHA, set when validating a range so formatters can identify the commit. */
   sha?: string;
+  /** Git revision range, set on the synthetic range-level report built by {@link validateRangeRules}. */
+  range?: string;
 }
 
 /**
@@ -98,5 +100,57 @@ export function validate(
     errorCount,
     warningCount,
     skippedGitRules,
+  };
+}
+
+/**
+ * Run all range-scoped rules (those with a `checkRange` method) against a
+ * commit range.
+ *
+ * Invoked once per range — after every commit in the range has been validated
+ * individually — with the number of commits the range contains.
+ *
+ * @param range - The git revision range being validated (e.g. `"main..HEAD"`).
+ * @param commitCount - Number of non-merge commits in the range.
+ * @param config - A resolved config (from `loadConfig()`).
+ * @returns A synthetic {@link ValidationReport} carrying {@link ValidationReport.range}
+ * (and no `sha`), or `null` when no range-scoped rule found problems.
+ */
+export function validateRangeRules(
+  range: string,
+  commitCount: number,
+  config: ResolvedConfig,
+): ValidationReport | null {
+  const registry = config.ruleRegistry ?? builtinRules;
+  const results: RuleResult[] = [];
+  let errorCount = 0;
+  let warningCount = 0;
+
+  for (const [ruleName, entry] of Object.entries(config.rules)) {
+    const rule = registry.get(ruleName);
+    if (!rule?.checkRange) continue;
+
+    const problems = rule.checkRange({ range, commitCount, options: entry.options });
+    if (problems.length === 0) continue;
+
+    results.push({ ruleName, severity: entry.severity, problems });
+    if (entry.severity === 'error') {
+      errorCount += problems.length;
+    } else {
+      warningCount += problems.length;
+    }
+  }
+
+  if (results.length === 0) return null;
+
+  return {
+    valid: errorCount === 0,
+    // Synthetic report: range problems are not tied to any single commit.
+    commit: parseCommit(''),
+    results,
+    errorCount,
+    warningCount,
+    skippedGitRules: [],
+    range,
   };
 }

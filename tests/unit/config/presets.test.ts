@@ -43,6 +43,18 @@ describe('presets', () => {
     assert.ok(!opts.allowed.includes('revert'));
   });
 
+  it('every preset enables max-commits at error', () => {
+    for (const [name, preset] of Object.entries({ strict, conventional, angular })) {
+      assert.deepEqual(
+        preset['max-commits'],
+        ['error', { max: 10 }],
+        `preset ${name} should enable max-commits at 10`,
+      );
+    }
+    // Hardened tightens the limit, consistent with its stricter option values.
+    assert.deepEqual(hardened['max-commits'], ['error', { max: 5 }]);
+  });
+
   it('hardened preset enables every builtin rule', () => {
     assert.deepEqual(
       Object.keys(hardened).sort(),
