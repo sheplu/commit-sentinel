@@ -217,7 +217,7 @@ const companyEmailRule = defineRule<{ domain?: string }>({
 
 ## Range-scoped rules
 
-Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). In single-message modes range-scoped rules never fire, so make `validate()` a no-op returning `[]`:
+Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). Empty ranges are included: `checkRange()` runs with `commitCount` 0, so `min-commits`-style rules work. A rule may define both functions — in range mode `validate()` runs once per commit and `checkRange()` once for the whole range — but pure range rules should make `validate()` a no-op returning `[]` so they stay silent in single-message modes:
 
 ```typescript
 const maxFixupsRule = defineRule<{ max?: number }>({
@@ -242,7 +242,7 @@ const maxFixupsRule = defineRule<{ max?: number }>({
 | Field | Type | Description |
 |-------|------|-------------|
 | `range` | `string` | The validated revision range (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`) |
-| `commitCount` | `number` | Number of non-merge commits in the range (`git rev-list --no-merges`) |
+| `commitCount` | `number` | Number of non-merge commits in the range (`git rev-list --no-merges`); `0` for an empty range |
 | `options` | your options type | From the `rules` config tuple, `{}` otherwise |
 
 The built-in `max-commits` rule is implemented exactly this way.

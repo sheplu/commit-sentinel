@@ -73,7 +73,7 @@ Full `ValidationReport` object with `valid`, `commit`, `results`, `errorCount`, 
 
 ### Range output
 
-With `--range`/`--base`, JSON output is an **array** of reports (one per commit, each carrying its `sha`) and SARIF output contains one run per commit. When a range-scoped rule (e.g. `max-commits`) finds a problem, one extra report/run is appended: it carries a `range` field instead of a `sha` and is not tied to any single commit.
+With `--range`/`--base`, JSON output is an **array** of reports (one per commit, each carrying its `sha`) and SARIF output contains one run per commit. When a range-scoped rule (e.g. `max-commits`) finds a problem, one extra report/run is appended: it carries a `range` field and a `kind: "range"` discriminator instead of a `sha` and is not tied to any single commit. Range-scoped rules also run on empty ranges, so such a report can be the only one in the output.
 
 ### SARIF (`--sarif`)
 

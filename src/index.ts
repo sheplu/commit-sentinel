@@ -13,6 +13,9 @@ export { builtinRules, getRule } from './rules/registry.ts';
 // Runner
 export { validate, validateRangeRules } from './runner.ts';
 
+// Git — enumerate ranges and read per-commit inputs (for range validation)
+export { listCommitsInRange, readCommitMessage, readGitMetaOrNull } from './git.ts';
+
 // Formatters
 export { humanFormatter } from './formatters/human.ts';
 export { jsonFormatter } from './formatters/json.ts';

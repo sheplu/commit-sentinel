@@ -55,6 +55,9 @@ export const humanFormatter: Formatter = {
     const rangeLabel = report.range === undefined ? null : `commit range: ${sanitize(report.range)}`;
 
     if (report.valid && report.warningCount === 0) {
+      // Defensive: the runner never produces a clean range report (it returns
+      // null when no range rule fires), so the rangeLabel path below is
+      // reachable only via direct formatter use with a hand-built report.
       lines.push(
         style('✔', 'green', color) +
           ` Valid ${rangeLabel ?? `commit message: ${sanitize(report.commit.header)}`}`,

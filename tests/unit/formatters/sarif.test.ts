@@ -157,7 +157,7 @@ describe('sarifFormatter range reports', () => {
     assert.equal(result.properties.range, 'main..HEAD');
     assert.equal(result.properties.commitSha, undefined);
     assert.equal(result.ruleId, 'max-commits');
-    assert.match(result.message.text, /^Range main\.\.HEAD contains/);
+    assert.match(result.message.text, /^\[range main\.\.HEAD\] Range main\.\.HEAD contains/);
     assert.equal(
       sarif.runs[0].tool.driver.rules[0].shortDescription.text,
       'Range must not contain more than the maximum number of commits',
@@ -185,5 +185,7 @@ describe('sarifFormatter range reports', () => {
     const result = sarif.runs[0].results[0];
     assert.equal(result.properties.commitSha, '0123456789abcdef0123456789abcdef01234567');
     assert.equal(result.properties.range, 'main..HEAD');
+    // The sha prefix wins; the range is not prefixed into the message twice.
+    assert.equal(result.message.text, '[01234567] Too many commits.');
   });
 });

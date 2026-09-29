@@ -37,6 +37,13 @@ export interface ValidationReport {
   sha?: string;
   /** Git revision range, set on the synthetic range-level report built by {@link validateRangeRules}. */
   range?: string;
+  /**
+   * Report discriminator: `'range'` on synthetic range-level reports built by
+   * {@link validateRangeRules}; per-commit reports omit it. Lets JSON/SARIF
+   * consumers tell range findings apart from per-commit ones without relying
+   * on an empty `commit.header`.
+   */
+  kind?: 'range';
 }
 
 /**
@@ -114,7 +121,9 @@ export function validate(
  * @param commitCount - Number of non-merge commits in the range.
  * @param config - A resolved config (from `loadConfig()`).
  * @returns A synthetic {@link ValidationReport} carrying {@link ValidationReport.range}
- * (and no `sha`), or `null` when no range-scoped rule found problems.
+ * and {@link ValidationReport.kind} (and no `sha`), or `null` when no range-scoped
+ * rule found problems. Runs on empty ranges too — a rule may report on
+ * `commitCount` 0.
  */
 export function validateRangeRules(
   range: string,
@@ -152,5 +161,6 @@ export function validateRangeRules(
     warningCount,
     skippedGitRules: [],
     range,
+    kind: 'range',
   };
 }

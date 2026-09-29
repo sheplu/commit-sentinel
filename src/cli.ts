@@ -161,8 +161,13 @@ async function validateRange(
 ): Promise<RunResult> {
   const shas = await listCommitsInRange(range);
 
-  // Empty range — return proper structured output per format (F11).
-  if (shas.length === 0) {
+  // Range-scoped rules (e.g. max-commits) run once against the whole range —
+  // including empty ranges, so plugin rules can observe a commitCount of 0.
+  const rangeReport = validateRangeRules(range, shas.length, config);
+
+  // Empty range with nothing to report — return structured empty output per
+  // format (F11).
+  if (shas.length === 0 && rangeReport === null) {
     if (formatter === jsonFormatter) {
       return { exitCode: 0, stdout: '[]\n', stderr: '' };
     }
@@ -197,10 +202,8 @@ async function validateRange(
     if (!report.valid) hasError = true;
   }
 
-  // Range-scoped rules (e.g. max-commits) run once against the whole range.
-  // The empty-range early-exit above never reaches here: zero commits cannot
-  // exceed any configured maximum.
-  const rangeReport = validateRangeRules(range, shas.length, config);
+  // Range-scoped rule findings ride along after the per-commit reports; on an
+  // empty range this is the only report.
   if (rangeReport) {
     reports.push(rangeReport);
     if (!rangeReport.valid) hasError = true;

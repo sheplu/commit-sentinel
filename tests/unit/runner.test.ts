@@ -199,6 +199,7 @@ describe('validateRangeRules', () => {
     assert.equal(report.errorCount, 1);
     assert.equal(report.warningCount, 0);
     assert.equal(report.range, 'main..HEAD');
+    assert.equal(report.kind, 'range');
     assert.equal(report.sha, undefined);
     assert.equal(report.commit.header, '');
     assert.deepEqual(report.skippedGitRules, []);
@@ -261,5 +262,32 @@ describe('validateRangeRules', () => {
     assert.ok(report);
     assert.equal(report.results[0]!.ruleName, 'single-commit');
     assert.equal(validateRangeRules('main..HEAD', 1, config), null);
+  });
+
+  it('runs range rules on an empty range (commitCount 0)', () => {
+    const minCommitsRule: Rule = {
+      meta: {
+        name: 'min-commits',
+        description: 'Range must contain at least one commit',
+        category: 'git',
+        requiresGit: false,
+        defaultSeverity: 'error',
+      },
+      validate: () => [],
+      checkRange: ({ range, commitCount }) =>
+        commitCount >= 1 ? [] : [{ message: `Range ${range} must contain at least one commit.` }],
+    };
+    const config: ResolvedConfig = {
+      rules: {
+        'min-commits': { severity: 'error', options: {} },
+      },
+      ruleRegistry: new Map([...builtinRules, ['min-commits', minCommitsRule]]),
+    };
+    const report = validateRangeRules('main..HEAD', 0, config);
+    assert.ok(report);
+    assert.equal(report.valid, false);
+    assert.equal(report.kind, 'range');
+    assert.equal(report.results[0]!.ruleName, 'min-commits');
+    assert.match(report.results[0]!.problems[0]!.message, /at least one commit/);
   });
 });

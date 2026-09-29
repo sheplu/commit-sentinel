@@ -72,7 +72,7 @@ export interface RuleContext<Options = unknown> {
 export interface RangeRuleContext<Options = unknown> {
   /** The git revision range being validated (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`). */
   range: string;
-  /** Number of non-merge commits in the range (`git rev-list --no-merges`). */
+  /** Number of non-merge commits in the range (`git rev-list --no-merges`); `0` for an empty range. */
   commitCount: number;
   /** Rule-specific options from the resolved config. */
   options: Options;
@@ -117,9 +117,12 @@ export interface Rule<Options = unknown> {
    * Validate an entire commit range (`--range` / `--base`).
    *
    * Optional — its presence marks the rule as range-scoped. Range-scoped
-   * rules are invoked once per range (not per commit) and should make
-   * {@link Rule.validate | validate} a no-op returning `[]` so they stay
-   * silently inapplicable in single-message modes.
+   * rules are invoked once per range (not per commit), including empty
+   * ranges where {@link RangeRuleContext.commitCount | commitCount} is 0.
+   * They should make {@link Rule.validate | validate} a no-op returning `[]`
+   * so they stay silently inapplicable in single-message modes. A rule may
+   * define both functions: in range mode `validate` runs once per commit
+   * and `checkRange` once for the whole range.
    */
   checkRange?(context: RangeRuleContext<Options>): RuleProblem[];
 }
