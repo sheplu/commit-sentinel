@@ -161,9 +161,30 @@ async function validateRange(
 ): Promise<RunResult> {
   const shas = await listCommitsInRange(range);
 
+  const reports: ValidationReport[] = [];
+  let hasError = false;
+
+  for (const sha of shas) {
+    const message = await readCommitMessage(sha);
+    const git = await readGitMetaOrNull(sha);
+    const report = validate(message, config, git);
+    // Attach SHA for structured formatters that need commit identity (F13).
+    report.sha = sha;
+    reports.push(report);
+    if (!report.valid) hasError = true;
+  }
+
   // Range-scoped rules (e.g. max-commits) run once against the whole range —
-  // including empty ranges, so plugin rules can observe a commitCount of 0.
+  // after every commit has been validated individually, and including empty
+  // ranges, so plugin rules can observe a commitCount of 0.
   const rangeReport = validateRangeRules(range, shas.length, config);
+
+  // Range-scoped rule findings ride along after the per-commit reports; on an
+  // empty range this is the only report.
+  if (rangeReport) {
+    reports.push(rangeReport);
+    if (!rangeReport.valid) hasError = true;
+  }
 
   // Empty range with nothing to report — return structured empty output per
   // format (F11).
@@ -187,26 +208,6 @@ async function validateRange(
       stdout: `No commits found in range "${range}".\n`,
       stderr: '',
     };
-  }
-
-  const reports: ValidationReport[] = [];
-  let hasError = false;
-
-  for (const sha of shas) {
-    const message = await readCommitMessage(sha);
-    const git = await readGitMetaOrNull(sha);
-    const report = validate(message, config, git);
-    // Attach SHA for structured formatters that need commit identity (F13).
-    report.sha = sha;
-    reports.push(report);
-    if (!report.valid) hasError = true;
-  }
-
-  // Range-scoped rule findings ride along after the per-commit reports; on an
-  // empty range this is the only report.
-  if (rangeReport) {
-    reports.push(rangeReport);
-    if (!rangeReport.valid) hasError = true;
   }
 
   // For structured formats, wrap multiple reports in a single valid document.

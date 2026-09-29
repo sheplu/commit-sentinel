@@ -220,19 +220,19 @@ const companyEmailRule = defineRule<{ domain?: string }>({
 Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). Empty ranges are included: `checkRange()` runs with `commitCount` 0, so `min-commits`-style rules work. A rule may define both functions — in range mode `validate()` runs once per commit and `checkRange()` once for the whole range — but pure range rules should make `validate()` a no-op returning `[]` so they stay silent in single-message modes:
 
 ```typescript
-const maxFixupsRule = defineRule<{ max?: number }>({
+const minCommitsRule = defineRule<{ min?: number }>({
   meta: {
-    name: 'max-fixups',
-    description: 'Range must not accumulate unsquashed fixup commits',
+    name: 'min-commits',
+    description: 'Range must contain at least a minimum number of commits',
     category: 'git',
     requiresGit: false,           // checkRange gets the count, not GitMeta
     defaultSeverity: 'error',
   },
   validate() { return []; },      // range-scoped: silently inapplicable per commit
   checkRange({ range, commitCount, options }) {
-    const max = options.max ?? 10;
-    if (commitCount <= max) return [];
-    return [{ message: `Range ${range} contains ${commitCount} commits, exceeds maximum of ${max}.` }];
+    const min = options.min ?? 1;
+    if (commitCount >= min) return [];
+    return [{ message: `Range ${range} contains ${commitCount} commits, below minimum of ${min}.` }];
   },
 });
 ```
