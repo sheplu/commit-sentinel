@@ -50,7 +50,7 @@ export async function readCommitMessage(ref = 'HEAD'): Promise<string> {
  */
 export function parseGitMeta(stdout: string): GitMeta {
   const lines = stdout.split('\n');
-  const authorEmail = lines[0] ?? '';
+  const authorEmail = lines[0];
   // %GK returns the signer key ID — non-empty when a signature is present,
   // regardless of whether the key can be verified locally.
   const sigKey = (lines[1] ?? '').trim();

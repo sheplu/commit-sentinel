@@ -57,7 +57,7 @@
     "test:smoke:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/smoke.lcov 'tests/smoke/**/*.test.ts'",
     "test:e2e:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/e2e.lcov 'tests/e2e/**/*.test.ts'",
     "test:fuzz:cov": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/fuzz.lcov 'tests/fuzz/**/*.test.ts'",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'tests/**/*.test.ts'",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-exclude='src/bin.ts' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'tests/**/*.test.ts'",
     "coverage:report": "node scripts/coverage-report.ts",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",

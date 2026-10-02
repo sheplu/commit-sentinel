@@ -101,6 +101,20 @@ describe('git operations', () => {
       () => readCommitMessage('nonexistent-ref-abc123'),
     );
   });
+
+  it('readCommitMessage rejects option-shaped refs (F10)', async () => {
+    await assert.rejects(
+      () => readCommitMessage('--exec=evil'),
+      /Refs must not start with "-"/,
+    );
+  });
+
+  it('listCommitsInRange rejects option-shaped ranges (F10)', async () => {
+    await assert.rejects(
+      () => listCommitsInRange('--exec=evil..HEAD'),
+      /Refs must not start with "-"/,
+    );
+  });
 });
 
 describe('merge commits in ranges', () => {

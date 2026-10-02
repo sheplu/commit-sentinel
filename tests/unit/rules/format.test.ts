@@ -46,6 +46,14 @@ describe('format rule', () => {
     assert.match(problems[0]!.message, /blank line/);
   });
 
+  it('accepts breaking-change marker without scope', () => {
+    assert.equal(run('feat!: drop v1 endpoint').length, 0);
+  });
+
+  it('accepts breaking-change marker with scope', () => {
+    assert.equal(run('feat(api)!: drop v1 endpoint').length, 0);
+  });
+
   it('reports all structural problems at once', () => {
     const problems = run('feat(  ):\tadd login\nno blank line');
     assert.equal(problems.length, 3);
