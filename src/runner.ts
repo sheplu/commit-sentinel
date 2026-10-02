@@ -56,7 +56,7 @@ export interface ValidationReport {
  * carries no registry.
  *
  * Rules with `requiresGit: true` are silently skipped (and listed in
- * {@link ValidationReport.skippedGitRules}) when {@link git} is `null`.
+ * {@link ValidationReport.skippedGitRules}) when `git` is `null`.
  *
  * @param message - The raw commit message string.
  * @param config - A resolved config (from `loadConfig()`).

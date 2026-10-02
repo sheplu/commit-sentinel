@@ -31,7 +31,7 @@ const CONFIG_FILE = 'commit-sentinel.config.ts';
  * Discover, load, and resolve a commit-sentinel configuration.
  *
  * Resolution order:
- * 1. Look for `commit-sentinel.config.ts` in {@link cwd} (or an explicit {@link configPath}).
+ * 1. Look for `commit-sentinel.config.ts` in `cwd` (or an explicit `configPath`).
  * 2. If found, `import()` it and read its default export.
  * 3. Merge `plugins` into the rule registry and auto-enable each plugin rule
  *    at its `meta.defaultSeverity`.
