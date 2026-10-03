@@ -8,12 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { runCli, runNode } from '../helpers/spawn.ts';
 import { gitEnv } from '../helpers/git-env.ts';
+import { createFixtureRepo } from '../helpers/fixture-repo.ts';
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 const execFileAsync = promisify(execFile);
-
-const INDEX_URL = pathToFileURL(
-  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
-).href;
 
 describe('CLI e2e', () => {
   let dir: string;
@@ -515,5 +513,58 @@ describe('CLI e2e symlinked entry (npm bin shims)', () => {
     const result = await runNode(driver, []);
     assert.equal(result.exitCode, 0);
     assert.match(result.stdout, /imported function/);
+  });
+});
+
+describe('CLI e2e max-commits range rule', () => {
+  let dir: string;
+  let previousCwd: string;
+
+  beforeEach(async () => {
+    previousCwd = process.cwd();
+    dir = await createFixtureRepo('commit-sentinel-e2e-maxcommits-', [
+      'chore: first',
+      'chore: second',
+      'chore: third',
+      'chore: fourth',
+    ]);
+    await writeFile(
+      join(dir, 'max.config.ts'),
+      `export default { extends: 'strict', rules: { 'max-commits': ['error', { max: 2 }] } };`,
+    );
+    process.chdir(dir);
+  });
+
+  afterEach(async () => {
+    process.chdir(previousCwd);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('fails a range containing more commits than the maximum', async () => {
+    const result = await runCli(['--range', 'HEAD~3..HEAD', '--config', 'max.config.ts']);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Invalid commit range: HEAD~3\.\.HEAD/);
+    assert.match(result.stderr, /\[max-commits\]/);
+  });
+
+  it('appends the synthetic range report to the JSON output', async () => {
+    const result = await runCli([
+      '--range', 'HEAD~3..HEAD', '--json', '--config', 'max.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    const reports = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(reports));
+    assert.equal(reports.length, 4);
+    assert.equal(reports[3].range, 'HEAD~3..HEAD');
+    assert.equal(reports[3].valid, false);
+    assert.equal(reports[3].results[0].ruleName, 'max-commits');
+  });
+
+  it('exits 1 for an empty --base value (unset CI variable scenario)', async () => {
+    const result = await runCli(['--base', '', '--config', 'max.config.ts']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --base requires a non-empty value\./);
   });
 });

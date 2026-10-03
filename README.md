@@ -55,12 +55,14 @@ See [docs/configuration.md](./docs/configuration.md) for config resolution, seve
 
 | Preset | Types | Notable defaults |
 |--------|-------|-----------------|
-| **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100 |
-| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100 |
-| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100 |
-| **hardened** | same as conventional | **all 14 rules at error** — subject-max: 72, header/body lines: 100, scope + body required, breaking-change footer required, signed commits, agent attribution blocked |
+| **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100, max-commits: error@10 |
+| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100, max-commits: error@10 |
+| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100, max-commits: error@10 |
+| **hardened** | same as conventional | **all 15 rules at error** — subject-max: 72, max 5 commits per range, header/body lines: 100, scope + body required, breaking-change footer required, signed commits, agent attribution blocked |
 
 > **Note:** `revert` (in the conventional, angular, and hardened presets) only covers explicit `revert: …` / `revert(scope): …` messages. Git's auto-generated `Revert "…"` messages do not match the `format` rule ([#24](https://github.com/silverwalls-labs/commit-sentinel/issues/24)).
+
+> **Note:** Every preset enables `max-commits` at error — 10 commits per validated range (`--range`/`--base`), tightened to 5 in hardened. Tune it via `'max-commits': ['error', { max: 20 }]` or disable with `'off'`.
 
 > **Note:** In the hardened preset, `scope-enum` and `author-email` are enabled but pass-through with their defaults (any scope, any email) — override their options to lock them down, e.g. `'author-email': ['error', { pattern: '^.+@company\\.com$' }]`.
 
@@ -69,7 +71,7 @@ See [docs/configuration.md](./docs/configuration.md) for config resolution, seve
 | Guide | Contents |
 |-------|----------|
 | [Configuration](./docs/configuration.md) | Config resolution, severity levels, custom rules |
-| [Rules](./docs/rules.md) | All 14 built-in rules, options, and defaults |
+| [Rules](./docs/rules.md) | All 15 built-in rules, options, and defaults |
 | [CLI reference](./docs/cli.md) | Options, examples, exit codes, output formats |
 | [Integrations](./docs/integrations.md) | Husky, lefthook, CI/CD pipelines |
 | [API](./docs/api.md) | Programmatic usage — `parseCommit`, `validate`, `loadConfig` |

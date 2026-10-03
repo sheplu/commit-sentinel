@@ -76,6 +76,7 @@ Plugin problems render exactly like built-in ones — in human, `--json`, and `-
 |-------|------|-------------|
 | `meta` | `RuleMeta` | Static metadata (below) |
 | `validate(context)` | `(ctx: RuleContext) => RuleProblem[]` | The check itself — must be pure and must not throw |
+| `checkRange(context)` | `(ctx: RangeRuleContext) => RuleProblem[]` | Optional — validates a whole commit range instead of one commit (see [Range-scoped rules](#range-scoped-rules)) |
 
 ### `RuleMeta`
 
@@ -214,6 +215,47 @@ const companyEmailRule = defineRule<{ domain?: string }>({
 
 > For this specific check, the built-in `author-email` rule with a `pattern` option is usually enough — the recipe above demonstrates the `requiresGit` mechanics.
 
+## Range-scoped rules
+
+Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). Empty ranges are included: `checkRange()` runs with `commitCount` 0, so `min-commits`-style rules work. Beyond the count, `commits` carries each commit's sha, parsed message, and git metadata (oldest first), so range rules can inspect the actual commits — e.g. reject duplicate subjects or `fixup!` leftovers. A rule may define both functions — in range mode `validate()` runs once per commit and `checkRange()` once for the whole range — but pure range rules should make `validate()` a no-op returning `[]` so they stay silent in single-message modes:
+
+```typescript
+const minCommitsRule = defineRule<{ min?: number }>({
+  meta: {
+    name: 'min-commits',
+    description: 'Range must contain at least a minimum number of commits',
+    category: 'git',
+    requiresGit: false,           // commits carry GitMeta already; no per-commit skip needed
+    defaultSeverity: 'error',
+  },
+  validate() { return []; },      // range-scoped: silently inapplicable per commit
+  checkRange({ range, commitCount, options }) {
+    const min = options.min ?? 1;
+    if (commitCount >= min) return [];
+    return [{ message: `Range ${range} contains ${commitCount} commits, below minimum of ${min}.` }];
+  },
+});
+```
+
+### `RangeRuleContext` — what `checkRange()` receives
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `range` | `string` | The validated revision range (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`) |
+| `commits` | `readonly RangeCommit[]` | The non-merge commits in the range, oldest first — each `{ sha, commit: ParsedCommit, git: GitMeta \| null }` (`git` is only `null` in programmatic contexts built without metadata) |
+| `commitCount` | `number` | Always `commits.length`; `0` for an empty range |
+| `options` | your options type | From the `rules` config tuple, `{}` otherwise |
+
+The built-in `max-commits` rule is implemented exactly this way. A rule that inspects the commits themselves follows the same shape:
+
+```typescript
+checkRange({ range, commits }) {
+  const fixups = commits.filter(({ commit }) => commit.header.startsWith('fixup!'));
+  if (fixups.length === 0) return [];
+  return [{ message: `Range ${range} contains ${fixups.length} unsquashed fixup commit(s).` }];
+}
+```
+
 ## Recipes
 
 Ready-to-paste rules for common gaps. (Some of these are planned as built-ins — see issues [#22](https://github.com/silverwalls-labs/commit-sentinel/issues/22) and [#23](https://github.com/silverwalls-labs/commit-sentinel/issues/23) — but work as plugins today.)
@@ -333,7 +375,7 @@ All plugin problems are caught at config load time, before any validation runs �
 
 | Situation | Error |
 |-----------|-------|
-| Entry in `plugins` isn't a rule object | `Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function).` |
+| Entry in `plugins` isn't a rule object | `Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function; validateOptions and checkRange, when present, must also be functions).` |
 | Plugin name matches a built-in rule | `Plugin rule "<name>" conflicts with a built-in rule of the same name.` |
 | Two plugins share a name | `Duplicate plugin rule "<name>": plugin rule names must be unique.` |
 | `rules` entry references a name that is neither built-in nor plugin | `Unknown rule "<name>" in config: not a built-in rule or a plugin rule.` |

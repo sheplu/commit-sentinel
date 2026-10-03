@@ -1,9 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { validate } from '../../src/runner.ts';
+import { validate, validateRangeRules } from '../../src/runner.ts';
 import type { ResolvedConfig } from '../../src/config/loader.ts';
 import type { Rule } from '../../src/rules/types.ts';
 import { builtinRules } from '../../src/rules/registry.ts';
+import { fakeCommits, minCommitsRule } from '../fixtures/range-rules.ts';
 
 describe('validate', () => {
   it('returns valid with no rules', () => {
@@ -178,5 +179,134 @@ describe('validate', () => {
       assert.equal(report.valid, true);
       assert.equal(report.results.length, 0);
     });
+  });
+});
+
+describe('validateRangeRules', () => {
+  const errorConfig: ResolvedConfig = {
+    rules: {
+      'max-commits': { severity: 'error', options: { max: 2 } },
+    },
+  };
+
+  it('returns null when the range is within the limit', () => {
+    assert.equal(validateRangeRules('main..HEAD', fakeCommits(2), errorConfig), null);
+  });
+
+  it('builds a synthetic report when the limit is exceeded', () => {
+    const report = validateRangeRules('main..HEAD', fakeCommits(3), errorConfig);
+    assert.ok(report);
+    assert.equal(report.valid, false);
+    assert.equal(report.errorCount, 1);
+    assert.equal(report.warningCount, 0);
+    assert.equal(report.range, 'main..HEAD');
+    assert.equal(report.kind, 'range');
+    assert.equal(report.sha, undefined);
+    assert.equal(report.commit.header, '');
+    assert.deepEqual(report.skippedGitRules, []);
+    assert.equal(report.results.length, 1);
+    assert.equal(report.results[0]!.ruleName, 'max-commits');
+    assert.match(report.results[0]!.problems[0]!.message, /3 commits, exceeds maximum of 2/);
+  });
+
+  it('reports warnings without failing validity at warn severity', () => {
+    const config: ResolvedConfig = {
+      rules: {
+        'max-commits': { severity: 'warn', options: { max: 2 } },
+      },
+    };
+    const report = validateRangeRules('main..HEAD', fakeCommits(3), config);
+    assert.ok(report);
+    assert.equal(report.valid, true);
+    assert.equal(report.errorCount, 0);
+    assert.equal(report.warningCount, 1);
+  });
+
+  it('ignores unknown rule names', () => {
+    const config: ResolvedConfig = {
+      rules: {
+        'nonexistent': { severity: 'error', options: {} },
+      },
+    };
+    assert.equal(validateRangeRules('main..HEAD', fakeCommits(100), config), null);
+  });
+
+  it('ignores per-commit rules without checkRange', () => {
+    const config: ResolvedConfig = {
+      rules: {
+        'format': { severity: 'error', options: {} },
+      },
+    };
+    assert.equal(validateRangeRules('main..HEAD', fakeCommits(100), config), null);
+  });
+
+  it('runs a plugin range rule from a custom registry', () => {
+    const singleCommitRule: Rule = {
+      meta: {
+        name: 'single-commit',
+        description: 'Range must contain exactly one commit',
+        category: 'git',
+        requiresGit: false,
+        defaultSeverity: 'error',
+      },
+      validate: () => [],
+      checkRange: ({ range, commitCount }) =>
+        commitCount === 1 ? [] : [{ message: `Range ${range} must contain exactly one commit.` }],
+    };
+    const config: ResolvedConfig = {
+      rules: {
+        'single-commit': { severity: 'error', options: {} },
+      },
+      ruleRegistry: new Map([...builtinRules, ['single-commit', singleCommitRule]]),
+    };
+    const report = validateRangeRules('main..HEAD', fakeCommits(2), config);
+    assert.ok(report);
+    assert.equal(report.results[0]!.ruleName, 'single-commit');
+    assert.equal(validateRangeRules('main..HEAD', fakeCommits(1), config), null);
+  });
+
+  it('runs range rules on an empty range (commitCount 0)', () => {
+    const config: ResolvedConfig = {
+      rules: {
+        'min-commits': { severity: 'error', options: {} },
+      },
+      ruleRegistry: new Map([...builtinRules, ['min-commits', minCommitsRule]]),
+    };
+    const report = validateRangeRules('main..HEAD', [], config);
+    assert.ok(report);
+    assert.equal(report.valid, false);
+    assert.equal(report.kind, 'range');
+    assert.equal(report.results[0]!.ruleName, 'min-commits');
+    assert.match(report.results[0]!.problems[0]!.message, /at least one commit/);
+  });
+
+  it('passes the commits themselves to checkRange, oldest first', () => {
+    const seen: Array<readonly unknown[]> = [];
+    const probeRule: Rule = {
+      meta: {
+        name: 'commits-probe',
+        description: 'Records the commits received by checkRange',
+        category: 'git',
+        requiresGit: false,
+        defaultSeverity: 'error',
+      },
+      validate: () => [],
+      checkRange: ({ commits, commitCount }) => {
+        seen.push(commits);
+        assert.equal(commitCount, commits.length);
+        return [];
+      },
+    };
+    const config: ResolvedConfig = {
+      rules: {
+        'commits-probe': { severity: 'error', options: {} },
+      },
+      ruleRegistry: new Map([...builtinRules, ['commits-probe', probeRule]]),
+    };
+    const commits = fakeCommits(3);
+    assert.equal(validateRangeRules('main..HEAD', commits, config), null);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0], commits);
+    assert.equal((seen[0]![0] as { commit: { type: string } }).commit.type, 'chore');
   });
 });

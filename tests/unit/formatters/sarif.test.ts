@@ -132,3 +132,60 @@ describe('sarifFormatter', () => {
     assert.equal(sarif.runs[0].tool.driver.rules[0].shortDescription.text, 'no-wip');
   });
 });
+
+describe('sarifFormatter range reports', () => {
+  it('includes the range in properties when the report carries one', () => {
+    const output = sarifFormatter.format({
+      valid: false,
+      commit: parseCommit(''),
+      range: 'main..HEAD',
+      results: [
+        {
+          ruleName: 'max-commits',
+          severity: 'error',
+          problems: [
+            { message: 'Range main..HEAD contains 12 commits, exceeds maximum of 10.' },
+          ],
+        },
+      ],
+      errorCount: 1,
+      warningCount: 0,
+      skippedGitRules: [],
+    });
+    const sarif = JSON.parse(output);
+    const result = sarif.runs[0].results[0];
+    assert.equal(result.properties.range, 'main..HEAD');
+    assert.equal(result.properties.commitSha, undefined);
+    assert.equal(result.ruleId, 'max-commits');
+    assert.match(result.message.text, /^\[range main\.\.HEAD\] Range main\.\.HEAD contains/);
+    assert.equal(
+      sarif.runs[0].tool.driver.rules[0].shortDescription.text,
+      'Range must not contain more than the maximum number of commits',
+    );
+  });
+
+  it('keeps commitSha alongside range when both are set', () => {
+    const output = sarifFormatter.format({
+      valid: false,
+      commit: parseCommit(''),
+      sha: '0123456789abcdef0123456789abcdef01234567',
+      range: 'main..HEAD',
+      results: [
+        {
+          ruleName: 'max-commits',
+          severity: 'error',
+          problems: [{ message: 'Too many commits.' }],
+        },
+      ],
+      errorCount: 1,
+      warningCount: 0,
+      skippedGitRules: [],
+    });
+    const sarif = JSON.parse(output);
+    const result = sarif.runs[0].results[0];
+    assert.equal(result.properties.commitSha, '0123456789abcdef0123456789abcdef01234567');
+    assert.equal(result.properties.range, 'main..HEAD');
+    // The sha prefix wins; the range is not prefixed into the message twice.
+    assert.equal(result.message.text, '[01234567] Too many commits.');
+  });
+});

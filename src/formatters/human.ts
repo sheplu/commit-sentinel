@@ -51,10 +51,16 @@ export const humanFormatter: Formatter = {
   format(report: ValidationReport, options?: FormatOptions): string {
     const color = options?.color ?? hasColors();
     const lines: string[] = [];
+    // Synthetic range-level reports identify themselves by range, not header.
+    const rangeLabel = report.range === undefined ? null : `commit range: ${sanitize(report.range)}`;
 
     if (report.valid && report.warningCount === 0) {
+      // Defensive: the runner never produces a clean range report (it returns
+      // null when no range rule fires), so the rangeLabel path below is
+      // reachable only via direct formatter use with a hand-built report.
       lines.push(
-        style('✔', 'green', color) + ` Valid commit message: ${sanitize(report.commit.header)}`,
+        style('✔', 'green', color) +
+          ` Valid ${rangeLabel ?? `commit message: ${sanitize(report.commit.header)}`}`,
       );
       if (report.skippedGitRules.length > 0) {
         lines.push(
@@ -66,10 +72,11 @@ export const humanFormatter: Formatter = {
     }
 
     const header = report.commit.header.length > 0 ? sanitize(report.commit.header) : '<empty>';
+    const target = rangeLabel ?? `commit message: ${header}`;
     if (report.valid) {
-      lines.push(style('✔', 'green', color) + ` Valid commit message: ${header}`);
+      lines.push(style('✔', 'green', color) + ` Valid ${target}`);
     } else {
-      lines.push(style('✖', 'red', color) + ` Invalid commit message: ${header}`);
+      lines.push(style('✖', 'red', color) + ` Invalid ${target}`);
     }
 
     lines.push('');

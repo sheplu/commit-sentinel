@@ -61,6 +61,35 @@ export interface RuleContext<Options = unknown> {
   options: Options;
 }
 
+/** A commit within a validated range, as passed to range-scoped rules. */
+export interface RangeCommit {
+  /** Full 40-character commit SHA. */
+  sha: string;
+  /** The parsed commit message. */
+  commit: ParsedCommit;
+  /** Git metadata for the commit, or `null` when built programmatically without it. */
+  git: GitMeta | null;
+}
+
+/**
+ * Context passed to a rule's {@link Rule.checkRange | checkRange} function.
+ *
+ * Only built for range validation (`--range` / `--base`); single-message
+ * modes never invoke range-scoped rules.
+ *
+ * @typeParam Options - The shape of the rule-specific options object.
+ */
+export interface RangeRuleContext<Options = unknown> {
+  /** The git revision range being validated (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`). */
+  range: string;
+  /** The non-merge commits in the range, oldest first; empty for an empty range. */
+  commits: readonly RangeCommit[];
+  /** Number of commits in the range — always `commits.length`; `0` for an empty range. */
+  commitCount: number;
+  /** Rule-specific options from the resolved config. */
+  options: Options;
+}
+
 /**
  * A commit-message validation rule.
  *
@@ -96,4 +125,16 @@ export interface Rule<Options = unknown> {
    * problems rather than throwing.
    */
   validate(context: RuleContext<Options>): RuleProblem[];
+  /**
+   * Validate an entire commit range (`--range` / `--base`).
+   *
+   * Optional — its presence marks the rule as range-scoped. Range-scoped
+   * rules are invoked once per range (not per commit), including empty
+   * ranges where {@link RangeRuleContext.commitCount | commitCount} is 0.
+   * They should make {@link Rule.validate | validate} a no-op returning `[]`
+   * so they stay silently inapplicable in single-message modes. A rule may
+   * define both functions: in range mode `validate` runs once per commit
+   * and `checkRange` once for the whole range.
+   */
+  checkRange?(context: RangeRuleContext<Options>): RuleProblem[];
 }

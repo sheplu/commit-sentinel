@@ -2,14 +2,10 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import { loadConfig } from '../../src/config/loader.ts';
 import { validate } from '../../src/runner.ts';
-
-const INDEX_URL = pathToFileURL(
-  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
-).href;
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 /** A minimal plugin rule as inline config-file source. */
 function pluginSource(name: string, defaultSeverity = 'error'): string {
@@ -314,6 +310,7 @@ describe('loadConfig', () => {
         "{ meta: { name: 42 }, validate() { return []; } }",
         "{ meta: { name: 'no-validate' } }",
         "{ meta: { name: 'bad-validate-options' }, validate() { return []; }, validateOptions: 'typo' }",
+        "{ meta: { name: 'bad-check-range' }, validate() { return []; }, checkRange: 'typo' }",
       ];
 
       for (const [index, plugin] of invalidPlugins.entries()) {
@@ -352,6 +349,22 @@ describe('loadConfig', () => {
       await assert.rejects(
         () => loadConfig(dir),
         /Invalid options for rule "header-max-length"/,
+      );
+    });
+
+    it('throws for invalid max-commits option', async () => {
+      const configContent = `
+        export default {
+          extends: 'strict',
+          rules: {
+            'max-commits': ['error', { max: 0 }],
+          },
+        };
+      `;
+      await writeFile(join(dir, 'commit-sentinel.config.ts'), configContent);
+      await assert.rejects(
+        () => loadConfig(dir),
+        /Invalid options for rule "max-commits"/,
       );
     });
 

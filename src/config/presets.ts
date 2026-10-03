@@ -9,6 +9,7 @@ export const strict: Preset = {
   'type-enum': ['error', { allowed: ['feat', 'fix', 'chore'] }],
   'header-max-length': ['warn', { max: 100 }],
   'subject-min-length': ['error', { min: 1 }],
+  'max-commits': ['error', { max: 10 }],
 };
 
 /** Conventional Commits preset: all standard types, sensible defaults. */
@@ -26,6 +27,7 @@ export const conventional: Preset = {
   'header-max-length': ['warn', { max: 100 }],
   'subject-min-length': ['error', { min: 1 }],
   'subject-case': ['warn', { case: 'lower' }],
+  'max-commits': ['error', { max: 10 }],
 };
 
 /** Angular commit guidelines preset: stricter casing and header length. */
@@ -40,6 +42,7 @@ export const angular: Preset = {
   'header-max-length': ['error', { max: 100 }],
   'subject-min-length': ['error', { min: 1 }],
   'subject-case': ['error', { case: 'lower' }],
+  'max-commits': ['error', { max: 10 }],
 };
 
 /**
@@ -72,6 +75,7 @@ export const hardened: Preset = {
   'author-email': 'error',
   'signed': 'error',
   'agent-attribution': 'error',
+  'max-commits': ['error', { max: 5 }],
 };
 
 const presets: Record<string, Preset> = { strict, conventional, angular, hardened };

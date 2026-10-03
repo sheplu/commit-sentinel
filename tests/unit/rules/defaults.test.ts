@@ -11,6 +11,8 @@ import { breakingChangeRule } from '../../../src/rules/breaking-change.ts';
 import { typeEnumRule } from '../../../src/rules/type-enum.ts';
 import { scopeEnumRule } from '../../../src/rules/scope-enum.ts';
 import { agentAttributionRule } from '../../../src/rules/agent-attribution.ts';
+import { maxCommitsRule } from '../../../src/rules/max-commits.ts';
+import { fakeCommits } from '../../fixtures/range-rules.ts';
 
 describe('rule option defaults', () => {
   it('subject-max-length defaults to 72', () => {
@@ -102,6 +104,23 @@ describe('rule option defaults', () => {
     });
     assert.equal(problems.length, 1);
     assert.match(problems[0]!.message, /Claude Code/);
+  });
+
+  it('max-commits defaults to 10', () => {
+    const problems = maxCommitsRule.checkRange!({
+      range: 'main..HEAD',
+      commits: fakeCommits(11),
+      commitCount: 11,
+      options: {},
+    });
+    assert.equal(problems.length, 1);
+    assert.match(problems[0]!.message, /maximum of 10/);
+    assert.equal(maxCommitsRule.checkRange!({
+      range: 'main..HEAD',
+      commits: fakeCommits(10),
+      commitCount: 10,
+      options: {},
+    }).length, 0);
   });
 });
 

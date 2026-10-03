@@ -1,7 +1,7 @@
 import type { ParsedCommit } from './parser.ts';
 import { parseCommit } from './parser.ts';
 import type { GitMeta } from './git.ts';
-import type { ActiveSeverity, RuleProblem } from './rules/types.ts';
+import type { ActiveSeverity, RangeCommit, RuleProblem } from './rules/types.ts';
 import type { ResolvedConfig } from './config/loader.ts';
 import { builtinRules } from './rules/registry.ts';
 
@@ -35,6 +35,15 @@ export interface ValidationReport {
   skippedGitRules: string[];
   /** Git commit SHA, set when validating a range so formatters can identify the commit. */
   sha?: string;
+  /** Git revision range, set on the synthetic range-level report built by {@link validateRangeRules}. */
+  range?: string;
+  /**
+   * Report discriminator: `'range'` on synthetic range-level reports built by
+   * {@link validateRangeRules}; per-commit reports omit it. Lets JSON/SARIF
+   * consumers tell range findings apart from per-commit ones without relying
+   * on an empty `commit.header`.
+   */
+  kind?: 'range';
 }
 
 /**
@@ -47,7 +56,7 @@ export interface ValidationReport {
  * carries no registry.
  *
  * Rules with `requiresGit: true` are silently skipped (and listed in
- * {@link ValidationReport.skippedGitRules}) when {@link git} is `null`.
+ * {@link ValidationReport.skippedGitRules}) when `git` is `null`.
  *
  * @param message - The raw commit message string.
  * @param config - A resolved config (from `loadConfig()`).
@@ -98,5 +107,65 @@ export function validate(
     errorCount,
     warningCount,
     skippedGitRules,
+  };
+}
+
+/**
+ * Run all range-scoped rules (those with a `checkRange` method) against a
+ * commit range.
+ *
+ * Invoked once per range — after every commit in the range has been validated
+ * individually — with the commits the range contains (oldest first).
+ *
+ * @param range - The git revision range being validated (e.g. `"main..HEAD"`).
+ * @param commits - The non-merge commits in the range, oldest first.
+ * @param config - A resolved config (from `loadConfig()`).
+ * @returns A synthetic {@link ValidationReport} carrying {@link ValidationReport.range}
+ * and {@link ValidationReport.kind} (and no `sha`), or `null` when no range-scoped
+ * rule found problems. Runs on empty ranges too — a rule may report on
+ * zero commits.
+ */
+export function validateRangeRules(
+  range: string,
+  commits: readonly RangeCommit[],
+  config: ResolvedConfig,
+): ValidationReport | null {
+  const registry = config.ruleRegistry ?? builtinRules;
+  const results: RuleResult[] = [];
+  let errorCount = 0;
+  let warningCount = 0;
+
+  for (const [ruleName, entry] of Object.entries(config.rules)) {
+    const rule = registry.get(ruleName);
+    if (!rule?.checkRange) continue;
+
+    const problems = rule.checkRange({
+      range,
+      commits,
+      commitCount: commits.length,
+      options: entry.options,
+    });
+    if (problems.length === 0) continue;
+
+    results.push({ ruleName, severity: entry.severity, problems });
+    if (entry.severity === 'error') {
+      errorCount += problems.length;
+    } else {
+      warningCount += problems.length;
+    }
+  }
+
+  if (results.length === 0) return null;
+
+  return {
+    valid: errorCount === 0,
+    // Synthetic report: range problems are not tied to any single commit.
+    commit: parseCommit(''),
+    results,
+    errorCount,
+    warningCount,
+    skippedGitRules: [],
+    range,
+    kind: 'range',
   };
 }

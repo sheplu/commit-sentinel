@@ -39,3 +39,5 @@ jobs:
       - run: npm install -g @silverwalls-labs/commit-sentinel
       - run: commit-sentinel --base origin/main
 ```
+
+> **Note:** every preset enables the range-scoped `max-commits` rule at `error` (10 commits per validated range, 5 in hardened). Large PRs will fail the step above until you raise or disable it — e.g. `'max-commits': ['error', { max: 20 }]` or `'off'` in `commit-sentinel.config.ts`. See [rules.md](./rules.md).

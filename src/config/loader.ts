@@ -31,7 +31,7 @@ const CONFIG_FILE = 'commit-sentinel.config.ts';
  * Discover, load, and resolve a commit-sentinel configuration.
  *
  * Resolution order:
- * 1. Look for `commit-sentinel.config.ts` in {@link cwd} (or an explicit {@link configPath}).
+ * 1. Look for `commit-sentinel.config.ts` in `cwd` (or an explicit `configPath`).
  * 2. If found, `import()` it and read its default export.
  * 3. Merge `plugins` into the rule registry and auto-enable each plugin rule
  *    at its `meta.defaultSeverity`.
@@ -151,7 +151,7 @@ function buildRegistry(plugins: readonly Rule[]): ReadonlyMap<string, Rule> {
   for (const plugin of plugins) {
     if (!isRule(plugin)) {
       throw new Error(
-        'Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function; validateOptions, when present, must also be a function).',
+        'Invalid entry in "plugins": expected a rule created with defineRule() (an object with meta.name and a validate function; validateOptions and checkRange, when present, must also be functions).',
       );
     }
     const name = plugin.meta.name;
@@ -171,11 +171,15 @@ function isRule(value: unknown): value is Rule {
     meta?: { name?: unknown };
     validate?: unknown;
     validateOptions?: unknown;
+    checkRange?: unknown;
   } | null;
   if (typeof candidate?.meta?.name !== 'string' || typeof candidate.validate !== 'function') {
     return false;
   }
-  return candidate.validateOptions === undefined || typeof candidate.validateOptions === 'function';
+  if (candidate.validateOptions !== undefined && typeof candidate.validateOptions !== 'function') {
+    return false;
+  }
+  return candidate.checkRange === undefined || typeof candidate.checkRange === 'function';
 }
 
 function normalizeRuleConfig(name: string, config: RuleConfig): ResolvedRuleEntry | null {

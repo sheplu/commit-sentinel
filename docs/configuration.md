@@ -11,6 +11,7 @@ export default defineConfig({
     'subject-max-length': ['warn', { max: 72 }],
     'author-email': ['error', { pattern: '^.+@company\\.com$' }],
     'signed': 'off',
+    'max-commits': ['error', { max: 20 }],
   },
 });
 ```

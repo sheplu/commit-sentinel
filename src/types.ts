@@ -1,10 +1,12 @@
 // Re-export all public types from their source modules
 export type { ParsedCommit, Footer } from './parser.ts';
-export type { GitMeta } from './git.ts';
+export type { GitMeta, CommitRecord } from './git.ts';
 export type {
   Rule,
   RuleMeta,
   RuleContext,
+  RangeRuleContext,
+  RangeCommit,
   RuleProblem,
   RuleConfig,
   RuleCategory,

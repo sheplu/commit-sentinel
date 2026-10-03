@@ -1,16 +1,14 @@
 import { strict as assert } from 'node:assert';
-import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { run } from '../../src/cli.ts';
 import { VERSION } from '../../src/version.ts';
 import { attribution } from '../fixtures/messages.ts';
-import { gitEnv } from '../helpers/git-env.ts';
-
-const execFileAsync = promisify(execFile);
+import { commitsProbeConfigSource, minCommitsConfigSource } from '../fixtures/range-rules.ts';
+import { createFixtureRepo } from '../helpers/fixture-repo.ts';
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 describe('CLI run()', () => {
   let dir: string;
@@ -340,22 +338,13 @@ describe('CLI run() range validation (fixture git repo)', () => {
 
   beforeEach(async () => {
     previousCwd = process.cwd();
-    dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-range-'));
-
-    const commit = (message: string) =>
-      execFileAsync(
-        'git',
-        ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
-          'commit', '--allow-empty', '-m', message],
-        { cwd: dir, env: gitEnv },
-      );
-
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
     // Oldest→newest: valid, invalid, valid. The range HEAD~2..HEAD covers
     // the last two, so it always contains exactly one invalid commit.
-    await commit('chore: bootstrap fixture');
-    await commit('bad message with no colon');
-    await commit('feat: valid change');
+    dir = await createFixtureRepo('commit-sentinel-range-', [
+      'chore: bootstrap fixture',
+      'bad message with no colon',
+      'feat: valid change',
+    ]);
     process.chdir(dir);
   });
 
@@ -401,5 +390,205 @@ describe('CLI run() range validation (fixture git repo)', () => {
     assert.equal(reports.length, 2);
     assert.equal(reports[0].valid, false);
     assert.equal(reports[1].valid, true);
+  });
+});
+
+describe('CLI run() max-commits range rule (fixture git repo)', () => {
+  let dir: string;
+  let previousCwd: string;
+
+  beforeEach(async () => {
+    previousCwd = process.cwd();
+    // Four valid commits so HEAD~3..HEAD contains 3 and only max-commits fires.
+    dir = await createFixtureRepo('commit-sentinel-maxcommits-', [
+      'chore: bootstrap fixture',
+      'chore: second change',
+      'chore: third change',
+      'chore: fourth change',
+    ]);
+
+    await writeFile(
+      join(dir, 'max-error.config.ts'),
+      `export default { extends: 'strict', rules: { 'max-commits': ['error', { max: 2 }] } };`,
+    );
+    await writeFile(
+      join(dir, 'max-warn.config.ts'),
+      `export default { extends: 'strict', rules: { 'max-commits': ['warn', { max: 2 }] } };`,
+    );
+    await writeFile(
+      join(dir, 'max-off.config.ts'),
+      `export default { extends: 'strict', rules: { 'max-commits': 'off' } };`,
+    );
+    await writeFile(join(dir, 'min-commits.config.ts'), minCommitsConfigSource(INDEX_URL));
+    await writeFile(join(dir, 'commits-probe.config.ts'), commitsProbeConfigSource(INDEX_URL));
+    process.chdir(dir);
+  });
+
+  afterEach(async () => {
+    process.chdir(previousCwd);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('exits 2 with a range block after the per-commit blocks when exceeded', async () => {
+    const result = await run(['--range', 'HEAD~3..HEAD', '--config', 'max-error.config.ts']);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Invalid commit range: HEAD~3\.\.HEAD/);
+    assert.match(result.stderr, /Range HEAD~3\.\.HEAD contains 3 commits, exceeds maximum of 2\./);
+    assert.match(result.stderr, /\[max-commits\]/);
+    // The synthetic range block renders after the per-commit blocks.
+    assert.ok(
+      result.stderr.lastIndexOf('Valid commit message') <
+        result.stderr.indexOf('Invalid commit range'),
+    );
+  });
+
+  it('exits 0 at the exact limit', async () => {
+    const result = await run(['--range', 'HEAD~2..HEAD', '--config', 'max-error.config.ts']);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    assert.doesNotMatch(result.stdout, /max-commits/);
+  });
+
+  it('appends a synthetic range report to the JSON array when exceeded', async () => {
+    const result = await run([
+      '--range', 'HEAD~3..HEAD', '--json', '--config', 'max-error.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stderr, '');
+    const reports = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(reports));
+    assert.equal(reports.length, 4);
+    const rangeReport = reports[3];
+    assert.equal(rangeReport.valid, false);
+    assert.equal(rangeReport.kind, 'range');
+    assert.equal(rangeReport.range, 'HEAD~3..HEAD');
+    assert.equal(rangeReport.sha, undefined);
+    assert.equal(rangeReport.results[0].ruleName, 'max-commits');
+  });
+
+  it('appends a range-level SARIF run when exceeded', async () => {
+    const result = await run([
+      '--range', 'HEAD~3..HEAD', '--sarif', '--config', 'max-error.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stderr, '');
+    const sarif = JSON.parse(result.stdout);
+    assert.equal(sarif.runs.length, 4);
+    const rangeRun = sarif.runs[3];
+    assert.equal(rangeRun.results[0].level, 'error');
+    assert.equal(rangeRun.results[0].properties.range, 'HEAD~3..HEAD');
+    assert.equal(rangeRun.results[0].properties.commitSha, undefined);
+    assert.match(rangeRun.results[0].message.text, /^\[range HEAD~3\.\.HEAD\]/);
+    assert.equal(rangeRun.tool.driver.rules[0].id, 'max-commits');
+    assert.equal(
+      rangeRun.tool.driver.rules[0].shortDescription.text,
+      'Range must not contain more than the maximum number of commits',
+    );
+  });
+
+  it('reports without failing at warn severity', async () => {
+    const result = await run(['--range', 'HEAD~3..HEAD', '--config', 'max-warn.config.ts']);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    assert.match(result.stdout, /Valid commit range: HEAD~3\.\.HEAD/);
+    assert.match(result.stdout, /exceeds maximum of 2/);
+    assert.match(result.stdout, /1 warning/);
+  });
+
+  it('stays silent when the rule is off', async () => {
+    const result = await run(['--range', 'HEAD~3..HEAD', '--config', 'max-off.config.ts']);
+    assert.equal(result.exitCode, 0);
+    assert.doesNotMatch(result.stdout, /max-commits/);
+  });
+
+  it('reports the derived range for --base', async () => {
+    const result = await run(['--base', 'HEAD~3', '--config', 'max-error.config.ts']);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /Invalid commit range: HEAD~3\.\.HEAD/);
+  });
+
+  it('is silently inapplicable in single-message mode', async () => {
+    const result = await run([
+      '--message', 'feat: add login', '--config', 'max-error.config.ts',
+    ]);
+    assert.equal(result.exitCode, 0);
+    assert.doesNotMatch(result.stdout, /max-commits/);
+    assert.doesNotMatch(result.stdout, /Skipped git-metadata rules/);
+  });
+
+  it('runs range-scoped rules on an empty range (commitCount 0)', async () => {
+    const result = await run(['--range', 'HEAD..HEAD', '--config', 'min-commits.config.ts']);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Invalid commit range: HEAD\.\.HEAD/);
+    assert.match(result.stderr, /\[min-commits\]/);
+    assert.match(result.stderr, /must contain at least one commit/);
+  });
+
+  it('returns the range report alone as JSON for an empty range', async () => {
+    const result = await run([
+      '--range', 'HEAD..HEAD', '--json', '--config', 'min-commits.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.stderr, '');
+    const reports = JSON.parse(result.stdout);
+    assert.ok(Array.isArray(reports));
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].kind, 'range');
+    assert.equal(reports[0].range, 'HEAD..HEAD');
+    assert.equal(reports[0].sha, undefined);
+    assert.equal(reports[0].results[0].ruleName, 'min-commits');
+  });
+
+  it('still reports an empty range as clean when no range rule fires', async () => {
+    const result = await run(['--range', 'HEAD..HEAD', '--config', 'max-error.config.ts']);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    assert.match(result.stdout, /No commits found/);
+  });
+
+  it('returns an empty JSON array for a clean empty range', async () => {
+    const result = await run([
+      '--range', 'HEAD..HEAD', '--json', '--config', 'max-error.config.ts',
+    ]);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    assert.equal(result.stdout, '[]\n');
+  });
+
+  it('returns an empty SARIF document for a clean empty range', async () => {
+    const result = await run([
+      '--range', 'HEAD..HEAD', '--sarif', '--config', 'max-error.config.ts',
+    ]);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    const sarif = JSON.parse(result.stdout);
+    assert.equal(sarif.version, '2.1.0');
+    assert.deepEqual(sarif.runs[0].results, []);
+  });
+
+  it('passes per-commit data (sha, parsed commit, git meta) to checkRange', async () => {
+    const result = await run([
+      '--range', 'HEAD~3..HEAD', '--config', 'commits-probe.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    // The probe reports what it received: 3 commits, oldest first, with the
+    // real sha prefix, the parsed type, and the fixture author email.
+    assert.match(result.stderr, /probe: count=3\/3 sha=[0-9a-f]{7} type=chore email=test@example\.com/);
+  });
+
+  it('rejects an empty --range value', async () => {
+    const result = await run(['--range', '']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --range requires a non-empty value\./);
+  });
+
+  it('rejects an empty --base value', async () => {
+    const result = await run(['--base', '']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --base requires a non-empty value\./);
   });
 });

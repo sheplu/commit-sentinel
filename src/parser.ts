@@ -170,7 +170,6 @@ function findFooterSectionStart(lines: string[], start: number, end: number): nu
   if (FOOTER_LINE_RE.test(lines[start]!)) candidates.push(start);
   for (const blank of blanks) {
     const paraStart = blank + 1;
-    if (paraStart >= end) continue;
     if (FOOTER_LINE_RE.test(lines[paraStart]!)) candidates.push(paraStart);
   }
 
@@ -215,7 +214,7 @@ function parseFooterSection(lines: string[], from: number, end: number): Footer[
     }
   }
 
-  return footers.length > 0 ? footers : null;
+  return footers;
 }
 
 function joinLines(lines: string[], from: number, to: number): string {

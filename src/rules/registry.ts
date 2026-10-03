@@ -13,8 +13,9 @@ import { breakingChangeRule } from './breaking-change.ts';
 import { authorEmailRule } from './author-email.ts';
 import { signedRule } from './signed.ts';
 import { agentAttributionRule } from './agent-attribution.ts';
+import { maxCommitsRule } from './max-commits.ts';
 
-/** All 14 built-in rules, keyed by name. */
+/** All 15 built-in rules, keyed by name. */
 export const builtinRules: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   ['format', formatRule],
   ['type-enum', typeEnumRule],
@@ -30,6 +31,7 @@ export const builtinRules: ReadonlyMap<string, Rule> = new Map<string, Rule>([
   ['author-email', authorEmailRule],
   ['signed', signedRule],
   ['agent-attribution', agentAttributionRule],
+  ['max-commits', maxCommitsRule],
 ]);
 
 /**
