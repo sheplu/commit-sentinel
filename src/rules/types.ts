@@ -61,6 +61,16 @@ export interface RuleContext<Options = unknown> {
   options: Options;
 }
 
+/** A commit within a validated range, as passed to range-scoped rules. */
+export interface RangeCommit {
+  /** Full 40-character commit SHA. */
+  sha: string;
+  /** The parsed commit message. */
+  commit: ParsedCommit;
+  /** Git metadata for the commit, or `null` when built programmatically without it. */
+  git: GitMeta | null;
+}
+
 /**
  * Context passed to a rule's {@link Rule.checkRange | checkRange} function.
  *
@@ -72,7 +82,9 @@ export interface RuleContext<Options = unknown> {
 export interface RangeRuleContext<Options = unknown> {
   /** The git revision range being validated (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`). */
   range: string;
-  /** Number of non-merge commits in the range (`git rev-list --no-merges`); `0` for an empty range. */
+  /** The non-merge commits in the range, oldest first; empty for an empty range. */
+  commits: readonly RangeCommit[];
+  /** Number of commits in the range — always `commits.length`; `0` for an empty range. */
   commitCount: number;
   /** Rule-specific options from the resolved config. */
   options: Options;

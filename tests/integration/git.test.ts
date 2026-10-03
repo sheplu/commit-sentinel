@@ -5,8 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import { parseGitMeta, readCommitMessage, readGitMeta, readGitMetaOrNull, listCommitsInRange } from '../../src/git.ts';
+import {
+  parseGitMeta,
+  parseCommitRecords,
+  readCommitMessage,
+  readCommitsInRange,
+  readGitMeta,
+  readGitMetaOrNull,
+  listCommitsInRange,
+} from '../../src/git.ts';
 import { gitEnv } from '../helpers/git-env.ts';
+import { createFixtureRepo } from '../helpers/fixture-repo.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +64,64 @@ describe('parseGitMeta', () => {
       authorEmail: '',
       signed: true,
     });
+  });
+});
+
+describe('parseCommitRecords', () => {
+  const SHA_A = 'a'.repeat(40);
+  const SHA_B = 'b'.repeat(40);
+
+  it('parses empty output into an empty array', () => {
+    assert.deepEqual(parseCommitRecords(''), []);
+  });
+
+  it('parses an unsigned record', () => {
+    const records = parseCommitRecords(`\u0000${SHA_A}\ndev@example.com\n\nfeat: add login\n\n`);
+    assert.deepEqual(records, [{
+      sha: SHA_A,
+      message: 'feat: add login\n\n',
+      meta: { authorEmail: 'dev@example.com', signed: false },
+    }]);
+  });
+
+  it('treats a non-empty signer key as signed', () => {
+    const records = parseCommitRecords(`\u0000${SHA_A}\ndev@example.com\nSHA256:abc123\nfeat: add login\n\n`);
+    assert.equal(records[0]!.meta.signed, true);
+  });
+
+  it('preserves an empty author email', () => {
+    const records = parseCommitRecords(`\u0000${SHA_A}\n\n\nfeat: add login\n\n`);
+    assert.deepEqual(records[0]!.meta, { authorEmail: '', signed: false });
+  });
+
+  it('parses multiple records with multiline bodies and blank lines', () => {
+    const records = parseCommitRecords(
+      `\u0000${SHA_A}\na@example.com\n\nfeat: one\n\nbody line\n\nmore body\n\n` +
+      `\u0000${SHA_B}\nb@example.com\nABCD1234\nfix: two\n\n`,
+    );
+    assert.equal(records.length, 2);
+    assert.equal(records[0]!.message, 'feat: one\n\nbody line\n\nmore body\n\n');
+    assert.equal(records[1]!.sha, SHA_B);
+    assert.deepEqual(records[1]!.meta, { authorEmail: 'b@example.com', signed: true });
+  });
+
+  it('parses an empty commit message as a bare newline', () => {
+    const records = parseCommitRecords(`\u0000${SHA_A}\ndev@example.com\n\n\n`);
+    assert.equal(records[0]!.message, '\n');
+  });
+
+  it('rejects output that does not start with a NUL delimiter', () => {
+    assert.throws(
+      () => parseCommitRecords(`${SHA_A}\ndev@example.com\n\nfeat: x\n\n`),
+      /must start with a NUL delimiter/,
+    );
+  });
+
+  it('rejects a malformed record', () => {
+    assert.throws(
+      () => parseCommitRecords('\u0000not-a-sha\n'),
+      /malformed commit record/,
+    );
   });
 });
 
@@ -115,6 +182,56 @@ describe('git operations', () => {
       /Refs must not start with "-"/,
     );
   });
+
+  it('readCommitsInRange rejects option-shaped ranges (F10)', async () => {
+    await assert.rejects(
+      () => readCommitsInRange('--exec=evil..HEAD'),
+      /Refs must not start with "-"/,
+    );
+  });
+
+  it('readCommitsInRange rejects an invalid range', async () => {
+    await assert.rejects(() => readCommitsInRange('nonexistent-ref-abc123..HEAD'));
+  });
+});
+
+describe('readCommitsInRange (fixture git repo)', () => {
+  let dir: string;
+  let previousCwd: string;
+
+  beforeEach(async () => {
+    previousCwd = process.cwd();
+    dir = await createFixtureRepo('commit-sentinel-readrange-', [
+      'chore: bootstrap fixture',
+      'feat: multiline change\n\nBody line one.\n\nBody line two.',
+      'fix: final change',
+    ]);
+    process.chdir(dir);
+  });
+
+  afterEach(async () => {
+    process.chdir(previousCwd);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('matches the per-sha readers exactly, oldest first', async () => {
+    const records = await readCommitsInRange('HEAD~2..HEAD');
+    const shas = await listCommitsInRange('HEAD~2..HEAD');
+    assert.deepEqual(records.map((r) => r.sha), shas);
+
+    for (const record of records) {
+      // Byte-identical message and equal metadata to the single-spawn readers.
+      assert.equal(record.message, await readCommitMessage(record.sha));
+      assert.deepEqual(record.meta, await readGitMetaOrNull(record.sha));
+    }
+    assert.match(records[0]!.message, /Body line one\.\n\nBody line two\./);
+    assert.equal(records[0]!.meta.authorEmail, 'test@example.com');
+    assert.equal(records[0]!.meta.signed, false);
+  });
+
+  it('returns an empty array for an empty range', async () => {
+    assert.deepEqual(await readCommitsInRange('HEAD..HEAD'), []);
+  });
 });
 
 describe('merge commits in ranges', () => {
@@ -159,5 +276,11 @@ describe('merge commits in ranges', () => {
       shas.map(async (sha) => (await readCommitMessage(sha)).split('\n')[0]!),
     );
     assert.deepEqual([...headers].sort(), ['feat: second feature', 'feat: side feature']);
+  });
+
+  it('readCommitsInRange excludes merge commits', async () => {
+    const records = await readCommitsInRange('HEAD~2..HEAD');
+    assert.deepEqual(records.map((r) => r.sha), await listCommitsInRange('HEAD~2..HEAD'));
+    assert.ok(records.every((r) => !r.message.includes('Merge branch')));
   });
 });

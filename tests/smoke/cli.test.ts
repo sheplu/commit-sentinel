@@ -1,21 +1,14 @@
 import { strict as assert } from 'node:assert';
-import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { run } from '../../src/cli.ts';
 import { VERSION } from '../../src/version.ts';
 import { attribution } from '../fixtures/messages.ts';
-import { gitEnv } from '../helpers/git-env.ts';
-
-const execFileAsync = promisify(execFile);
-
-const INDEX_URL = pathToFileURL(
-  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
-).href;
+import { commitsProbeConfigSource, minCommitsConfigSource } from '../fixtures/range-rules.ts';
+import { createFixtureRepo } from '../helpers/fixture-repo.ts';
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 describe('CLI run()', () => {
   let dir: string;
@@ -345,22 +338,13 @@ describe('CLI run() range validation (fixture git repo)', () => {
 
   beforeEach(async () => {
     previousCwd = process.cwd();
-    dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-range-'));
-
-    const commit = (message: string) =>
-      execFileAsync(
-        'git',
-        ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
-          'commit', '--allow-empty', '-m', message],
-        { cwd: dir, env: gitEnv },
-      );
-
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
     // Oldest→newest: valid, invalid, valid. The range HEAD~2..HEAD covers
     // the last two, so it always contains exactly one invalid commit.
-    await commit('chore: bootstrap fixture');
-    await commit('bad message with no colon');
-    await commit('feat: valid change');
+    dir = await createFixtureRepo('commit-sentinel-range-', [
+      'chore: bootstrap fixture',
+      'bad message with no colon',
+      'feat: valid change',
+    ]);
     process.chdir(dir);
   });
 
@@ -415,22 +399,13 @@ describe('CLI run() max-commits range rule (fixture git repo)', () => {
 
   beforeEach(async () => {
     previousCwd = process.cwd();
-    dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-maxcommits-'));
-
-    const commit = (message: string) =>
-      execFileAsync(
-        'git',
-        ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
-          'commit', '--allow-empty', '-m', message],
-        { cwd: dir, env: gitEnv },
-      );
-
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
     // Four valid commits so HEAD~3..HEAD contains 3 and only max-commits fires.
-    await commit('chore: bootstrap fixture');
-    await commit('chore: second change');
-    await commit('chore: third change');
-    await commit('chore: fourth change');
+    dir = await createFixtureRepo('commit-sentinel-maxcommits-', [
+      'chore: bootstrap fixture',
+      'chore: second change',
+      'chore: third change',
+      'chore: fourth change',
+    ]);
 
     await writeFile(
       join(dir, 'max-error.config.ts'),
@@ -444,27 +419,8 @@ describe('CLI run() max-commits range rule (fixture git repo)', () => {
       join(dir, 'max-off.config.ts'),
       `export default { extends: 'strict', rules: { 'max-commits': 'off' } };`,
     );
-    await writeFile(
-      join(dir, 'min-commits.config.ts'),
-      `import { defineRule } from '${INDEX_URL}';
-
-const minCommitsRule = defineRule({
-  meta: {
-    name: 'min-commits',
-    description: 'Range must contain at least one commit',
-    category: 'git',
-    requiresGit: false,
-    defaultSeverity: 'error',
-  },
-  validate() { return []; },
-  checkRange({ range, commitCount }) {
-    if (commitCount >= 1) return [];
-    return [{ message: 'Range ' + range + ' must contain at least one commit.' }];
-  },
-});
-
-export default { extends: 'strict', plugins: [minCommitsRule] };`,
-    );
+    await writeFile(join(dir, 'min-commits.config.ts'), minCommitsConfigSource(INDEX_URL));
+    await writeFile(join(dir, 'commits-probe.config.ts'), commitsProbeConfigSource(INDEX_URL));
     process.chdir(dir);
   });
 
@@ -610,5 +566,29 @@ export default { extends: 'strict', plugins: [minCommitsRule] };`,
     const sarif = JSON.parse(result.stdout);
     assert.equal(sarif.version, '2.1.0');
     assert.deepEqual(sarif.runs[0].results, []);
+  });
+
+  it('passes per-commit data (sha, parsed commit, git meta) to checkRange', async () => {
+    const result = await run([
+      '--range', 'HEAD~3..HEAD', '--config', 'commits-probe.config.ts',
+    ]);
+    assert.equal(result.exitCode, 2);
+    // The probe reports what it received: 3 commits, oldest first, with the
+    // real sha prefix, the parsed type, and the fixture author email.
+    assert.match(result.stderr, /probe: count=3\/3 sha=[0-9a-f]{7} type=chore email=test@example\.com/);
+  });
+
+  it('rejects an empty --range value', async () => {
+    const result = await run(['--range', '']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --range requires a non-empty value\./);
+  });
+
+  it('rejects an empty --base value', async () => {
+    const result = await run(['--base', '']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --base requires a non-empty value\./);
   });
 });

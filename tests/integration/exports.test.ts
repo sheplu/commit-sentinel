@@ -26,6 +26,7 @@ describe('package entry surface', () => {
       'listCommitsInRange',
       'readCommitMessage',
       'readGitMetaOrNull',
+      'readCommitsInRange',
       'validate',
       'validateRangeRules',
       'getRule',

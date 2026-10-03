@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { readCommitMessage, readGitMetaOrNull, listCommitsInRange } from './git.ts';
+import { readCommitMessage, readGitMetaOrNull, readCommitsInRange } from './git.ts';
 import { loadConfig } from './config/loader.ts';
 import type { ResolvedConfig } from './config/loader.ts';
 import { validate, validateRangeRules } from './runner.ts';
 import type { ValidationReport } from './runner.ts';
+import type { RangeCommit } from './rules/types.ts';
 import { humanFormatter } from './formatters/human.ts';
 import { jsonFormatter } from './formatters/json.ts';
 import { sarifFormatter } from './formatters/sarif.ts';
@@ -114,6 +115,16 @@ export async function run(argv: ReadonlyArray<string>): Promise<RunResult> {
     };
   }
 
+  // An empty --range/--base is almost always an unset CI variable. Fail fast:
+  // an empty string is falsy, and `..HEAD` is an empty range, so without these
+  // guards the run would silently validate nothing and exit 0.
+  if (values.range === '') {
+    return { exitCode: 1, stdout: '', stderr: 'Option --range requires a non-empty value.\n' };
+  }
+  if (values.base === '') {
+    return { exitCode: 1, stdout: '', stderr: 'Option --base requires a non-empty value.\n' };
+  }
+
   try {
     const config = await loadConfig(undefined, values.config);
     const formatter = values.sarif
@@ -123,7 +134,7 @@ export async function run(argv: ReadonlyArray<string>): Promise<RunResult> {
         : humanFormatter;
 
     // Range-based validation (--range or --base)
-    if (values.range || values.base) {
+    if (values.range !== undefined || values.base !== undefined) {
       const range = values.range ?? `${values.base}..HEAD`;
       return await validateRange(range, config, formatter);
     }
@@ -159,25 +170,27 @@ async function validateRange(
   config: ResolvedConfig,
   formatter: Formatter,
 ): Promise<RunResult> {
-  const shas = await listCommitsInRange(range);
+  // One `git log` spawn yields sha, message, and metadata for every commit.
+  const commits = await readCommitsInRange(range);
 
   const reports: ValidationReport[] = [];
+  const rangeCommits: RangeCommit[] = [];
   let hasError = false;
 
-  for (const sha of shas) {
-    const message = await readCommitMessage(sha);
-    const git = await readGitMetaOrNull(sha);
-    const report = validate(message, config, git);
+  for (const { sha, message, meta } of commits) {
+    const report = validate(message, config, meta);
     // Attach SHA for structured formatters that need commit identity (F13).
     report.sha = sha;
     reports.push(report);
+    // Reuse the already-parsed commit for range-scoped rules.
+    rangeCommits.push({ sha, commit: report.commit, git: meta });
     if (!report.valid) hasError = true;
   }
 
   // Range-scoped rules (e.g. max-commits) run once against the whole range —
   // after every commit has been validated individually, and including empty
   // ranges, so plugin rules can observe a commitCount of 0.
-  const rangeReport = validateRangeRules(range, shas.length, config);
+  const rangeReport = validateRangeRules(range, rangeCommits, config);
 
   // Range-scoped rule findings ride along after the per-commit reports; on an
   // empty range this is the only report.
@@ -188,7 +201,7 @@ async function validateRange(
 
   // Empty range with nothing to report — return structured empty output per
   // format (F11).
-  if (shas.length === 0 && rangeReport === null) {
+  if (commits.length === 0 && rangeReport === null) {
     if (formatter === jsonFormatter) {
       return { exitCode: 0, stdout: '[]\n', stderr: '' };
     }

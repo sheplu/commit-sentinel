@@ -2,14 +2,10 @@ import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import { loadConfig } from '../../src/config/loader.ts';
 import { validate } from '../../src/runner.ts';
-
-const INDEX_URL = pathToFileURL(
-  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
-).href;
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 /** A minimal plugin rule as inline config-file source. */
 function pluginSource(name: string, defaultSeverity = 'error'): string {

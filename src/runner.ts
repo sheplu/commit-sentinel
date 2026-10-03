@@ -1,7 +1,7 @@
 import type { ParsedCommit } from './parser.ts';
 import { parseCommit } from './parser.ts';
 import type { GitMeta } from './git.ts';
-import type { ActiveSeverity, RuleProblem } from './rules/types.ts';
+import type { ActiveSeverity, RangeCommit, RuleProblem } from './rules/types.ts';
 import type { ResolvedConfig } from './config/loader.ts';
 import { builtinRules } from './rules/registry.ts';
 
@@ -115,19 +115,19 @@ export function validate(
  * commit range.
  *
  * Invoked once per range — after every commit in the range has been validated
- * individually — with the number of commits the range contains.
+ * individually — with the commits the range contains (oldest first).
  *
  * @param range - The git revision range being validated (e.g. `"main..HEAD"`).
- * @param commitCount - Number of non-merge commits in the range.
+ * @param commits - The non-merge commits in the range, oldest first.
  * @param config - A resolved config (from `loadConfig()`).
  * @returns A synthetic {@link ValidationReport} carrying {@link ValidationReport.range}
  * and {@link ValidationReport.kind} (and no `sha`), or `null` when no range-scoped
  * rule found problems. Runs on empty ranges too — a rule may report on
- * `commitCount` 0.
+ * zero commits.
  */
 export function validateRangeRules(
   range: string,
-  commitCount: number,
+  commits: readonly RangeCommit[],
   config: ResolvedConfig,
 ): ValidationReport | null {
   const registry = config.ruleRegistry ?? builtinRules;
@@ -139,7 +139,12 @@ export function validateRangeRules(
     const rule = registry.get(ruleName);
     if (!rule?.checkRange) continue;
 
-    const problems = rule.checkRange({ range, commitCount, options: entry.options });
+    const problems = rule.checkRange({
+      range,
+      commits,
+      commitCount: commits.length,
+      options: entry.options,
+    });
     if (problems.length === 0) continue;
 
     results.push({ ruleName, severity: entry.severity, problems });

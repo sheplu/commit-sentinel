@@ -217,7 +217,7 @@ const companyEmailRule = defineRule<{ domain?: string }>({
 
 ## Range-scoped rules
 
-Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). Empty ranges are included: `checkRange()` runs with `commitCount` 0, so `min-commits`-style rules work. A rule may define both functions — in range mode `validate()` runs once per commit and `checkRange()` once for the whole range — but pure range rules should make `validate()` a no-op returning `[]` so they stay silent in single-message modes:
+Define `checkRange()` alongside `validate()` to validate an **entire commit range** (`--range` / `--base`) instead of a single commit. Its presence marks the rule as range-scoped: the runner calls it once per range — after every commit in the range has been validated individually — and any problems are reported in a synthetic report carrying the `range` (not a commit `sha`). Empty ranges are included: `checkRange()` runs with `commitCount` 0, so `min-commits`-style rules work. Beyond the count, `commits` carries each commit's sha, parsed message, and git metadata (oldest first), so range rules can inspect the actual commits — e.g. reject duplicate subjects or `fixup!` leftovers. A rule may define both functions — in range mode `validate()` runs once per commit and `checkRange()` once for the whole range — but pure range rules should make `validate()` a no-op returning `[]` so they stay silent in single-message modes:
 
 ```typescript
 const minCommitsRule = defineRule<{ min?: number }>({
@@ -225,7 +225,7 @@ const minCommitsRule = defineRule<{ min?: number }>({
     name: 'min-commits',
     description: 'Range must contain at least a minimum number of commits',
     category: 'git',
-    requiresGit: false,           // checkRange gets the count, not GitMeta
+    requiresGit: false,           // commits carry GitMeta already; no per-commit skip needed
     defaultSeverity: 'error',
   },
   validate() { return []; },      // range-scoped: silently inapplicable per commit
@@ -242,10 +242,19 @@ const minCommitsRule = defineRule<{ min?: number }>({
 | Field | Type | Description |
 |-------|------|-------------|
 | `range` | `string` | The validated revision range (e.g. `"main..HEAD"`; `--base X` becomes `"X..HEAD"`) |
-| `commitCount` | `number` | Number of non-merge commits in the range (`git rev-list --no-merges`); `0` for an empty range |
+| `commits` | `readonly RangeCommit[]` | The non-merge commits in the range, oldest first — each `{ sha, commit: ParsedCommit, git: GitMeta \| null }` (`git` is only `null` in programmatic contexts built without metadata) |
+| `commitCount` | `number` | Always `commits.length`; `0` for an empty range |
 | `options` | your options type | From the `rules` config tuple, `{}` otherwise |
 
-The built-in `max-commits` rule is implemented exactly this way.
+The built-in `max-commits` rule is implemented exactly this way. A rule that inspects the commits themselves follows the same shape:
+
+```typescript
+checkRange({ range, commits }) {
+  const fixups = commits.filter(({ commit }) => commit.header.startsWith('fixup!'));
+  if (fixups.length === 0) return [];
+  return [{ message: `Range ${range} contains ${fixups.length} unsquashed fixup commit(s).` }];
+}
+```
 
 ## Recipes
 

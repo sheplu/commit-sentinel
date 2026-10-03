@@ -56,8 +56,8 @@ See [docs/configuration.md](./docs/configuration.md) for config resolution, seve
 | Preset | Types | Notable defaults |
 |--------|-------|-----------------|
 | **strict** (default) | `feat`, `fix`, `chore` | header-max-length: warn@100, max-commits: error@10 |
-| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100 |
-| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100 |
+| **conventional** | `feat`, `fix`, `build`, `ci`, `docs`, `perf`, `refactor`, `style`, `test`, `chore`, `revert` | subject-case: warn@lower, header-max-length: warn@100, max-commits: error@10 |
+| **angular** | `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `test` | subject-case: error@lower, header-max-length: error@100, max-commits: error@10 |
 | **hardened** | same as conventional | **all 15 rules at error** — subject-max: 72, max 5 commits per range, header/body lines: 100, scope + body required, breaking-change footer required, signed commits, agent attribution blocked |
 
 > **Note:** `revert` (in the conventional, angular, and hardened presets) only covers explicit `revert: …` / `revert(scope): …` messages. Git's auto-generated `Revert "…"` messages do not match the `format` rule ([#24](https://github.com/silverwalls-labs/commit-sentinel/issues/24)).

@@ -2,10 +2,12 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { parseCommit } from '../../../src/parser.ts';
 import { maxCommitsRule } from '../../../src/rules/max-commits.ts';
+import { fakeCommits } from '../../fixtures/range-rules.ts';
 
 function run(commitCount: number, max?: number) {
   return maxCommitsRule.checkRange!({
     range: 'main..HEAD',
+    commits: fakeCommits(commitCount),
     commitCount,
     options: max === undefined ? {} : { max },
   });

@@ -8,12 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { runCli, runNode } from '../helpers/spawn.ts';
 import { gitEnv } from '../helpers/git-env.ts';
+import { createFixtureRepo } from '../helpers/fixture-repo.ts';
+import { INDEX_URL } from '../helpers/index-url.ts';
 
 const execFileAsync = promisify(execFile);
-
-const INDEX_URL = pathToFileURL(
-  resolve(import.meta.dirname, '..', '..', 'src', 'index.ts'),
-).href;
 
 describe('CLI e2e', () => {
   let dir: string;
@@ -524,21 +522,12 @@ describe('CLI e2e max-commits range rule', () => {
 
   beforeEach(async () => {
     previousCwd = process.cwd();
-    dir = await mkdtemp(join(tmpdir(), 'commit-sentinel-e2e-maxcommits-'));
-
-    const commit = (message: string) =>
-      execFileAsync(
-        'git',
-        ['-c', 'user.name=Test', '-c', 'user.email=test@example.com',
-          'commit', '--allow-empty', '-m', message],
-        { cwd: dir, env: gitEnv },
-      );
-
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: dir, env: gitEnv });
-    await commit('chore: first');
-    await commit('chore: second');
-    await commit('chore: third');
-    await commit('chore: fourth');
+    dir = await createFixtureRepo('commit-sentinel-e2e-maxcommits-', [
+      'chore: first',
+      'chore: second',
+      'chore: third',
+      'chore: fourth',
+    ]);
     await writeFile(
       join(dir, 'max.config.ts'),
       `export default { extends: 'strict', rules: { 'max-commits': ['error', { max: 2 }] } };`,
@@ -570,5 +559,12 @@ describe('CLI e2e max-commits range rule', () => {
     assert.equal(reports[3].range, 'HEAD~3..HEAD');
     assert.equal(reports[3].valid, false);
     assert.equal(reports[3].results[0].ruleName, 'max-commits');
+  });
+
+  it('exits 1 for an empty --base value (unset CI variable scenario)', async () => {
+    const result = await runCli(['--base', '', '--config', 'max.config.ts']);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Option --base requires a non-empty value\./);
   });
 });
